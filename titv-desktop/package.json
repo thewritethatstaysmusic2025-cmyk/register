@@ -1,0 +1,33 @@
+{
+  "name": "titv-engineering-scheduler-desktop",
+  "version": "4.0.1",
+  "private": true,
+  "description": "TITV Engineering Scheduler Windows Desktop",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "electron": "38.2.0",
+    "electron-builder": "26.0.12"
+  },
+  "build": {
+    "appId": "tw.org.titv.engineering.scheduler",
+    "productName": "TITV 工程部製播排班系統",
+    "asar": true,
+    "directories": { "output": "dist" },
+    "files": ["app/**/*", "main.cjs", "package.json"],
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TITV 工程部製播排班系統",
+      "artifactName": "TITV_工程部製播排班系統_Setup_${version}_${arch}.${ext}"
+    }
+  }
+}
