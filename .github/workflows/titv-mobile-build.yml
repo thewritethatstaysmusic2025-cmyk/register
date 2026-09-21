@@ -102,8 +102,10 @@ jobs:
       - name: Create iOS icon and splash source
         shell: bash
         run: |
-          python3 -m pip install --quiet pillow
-          python3 - <<'PY'
+          python3 -m venv .venv
+          source .venv/bin/activate
+          python -m pip install --quiet pillow
+          python - <<'PY'
           from PIL import Image
           src = Image.open('assets/source-icon.png').convert('RGBA')
           src.resize((1024, 1024), Image.Resampling.LANCZOS).save('assets/icon.png')
