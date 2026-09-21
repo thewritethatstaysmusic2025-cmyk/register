@@ -1,15 +1,18 @@
-name: Build TITV Windows Installer
+name: Build and Publish TITV Desktop
 
 on:
   push:
     branches:
-      - titv-desktop-build
+      - titv-desktop-autoupdate
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: titv-desktop
@@ -23,19 +26,18 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Prepare V3.30.5 desktop app
+      - name: Prepare V3.30.7 desktop app
         shell: pwsh
         run: |
-          $base = "https://6ab0b5600d26a5471dd4a27b--titv-engineering-scheduler.netlify.app"
+          $base = "https://6ab0bfee2d703b9a4ff788c0--titv-engineering-scheduler.netlify.app"
 
           New-Item -ItemType Directory -Force -Path app/vendor | Out-Null
           New-Item -ItemType Directory -Force -Path build | Out-Null
 
-          # Pin the exact production deployment that contains V3.30.5.
-          Invoke-WebRequest -Uri "$base/RELEASE_NOTES_V3.30.5.txt" -OutFile "app/RELEASE_NOTES_V3.30.5.txt"
-          $release = Get-Content "app/RELEASE_NOTES_V3.30.5.txt" -Raw
-          if ($release -notmatch "V3\.30\.5") {
-            throw "The pinned deploy is not V3.30.5."
+          Invoke-WebRequest -Uri "$base/RELEASE_NOTES_V3.30.7.txt" -OutFile "app/RELEASE_NOTES_V3.30.7.txt"
+          $release = Get-Content "app/RELEASE_NOTES_V3.30.7.txt" -Raw
+          if ($release -notmatch "V3\.30\.7") {
+            throw "Pinned Netlify deploy is not TITV V3.30.7."
           }
 
           Invoke-WebRequest -Uri "$base/" -OutFile "app/index.html"
@@ -47,18 +49,17 @@ jobs:
           Invoke-WebRequest -Uri "$base/android-chrome-192x192.png" -OutFile "app/android-chrome-192x192.png"
           Invoke-WebRequest -Uri "$base/site.webmanifest" -OutFile "app/site.webmanifest"
 
-          # Desktop build uses the same Netlify backend for LINE and holiday APIs.
           $p = Resolve-Path "app/index.html"
           $s = [System.IO.File]::ReadAllText($p, [System.Text.Encoding]::UTF8)
           $publicBase = "https://titv-engineering-scheduler.netlify.app"
-          $s = $s.Replace('fetch(`/.netlify/functions/', 'fetch(`' + $publicBase + '/.netlify/functions/')
+          $tick = [char]96
+          $s = $s.Replace("fetch(" + $tick + "/.netlify/functions/", "fetch(" + $tick + $publicBase + "/.netlify/functions/")
           $s = $s.Replace("fetch('/.netlify/functions/", "fetch('" + $publicBase + "/.netlify/functions/")
           $s = $s.Replace('fetch("/.netlify/functions/', 'fetch("' + $publicBase + '/.netlify/functions/')
           $s = $s.Replace('${location.origin}/line-webhook', $publicBase + '/line-webhook')
           $s = $s.Replace('${location.origin}', $publicBase)
           [System.IO.File]::WriteAllText($p, $s, [System.Text.UTF8Encoding]::new($false))
 
-          # Build a square Windows app icon from the official TITV red/gold emblem.
           Add-Type -AssemblyName System.Drawing
           $src = [System.Drawing.Image]::FromFile((Resolve-Path "app/android-chrome-192x192.png"))
           $bmp = New-Object System.Drawing.Bitmap 512, 512
@@ -76,14 +77,87 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Build Windows installer
+      - name: Build Windows installer and update metadata
         run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
-      - name: Upload installer
+      - name: Verify updater output
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $installer = "dist/TITV_Engineering_Scheduler_Setup_$($version)_x64.exe"
+          $blockmap = "$installer.blockmap"
+          if (!(Test-Path $installer)) { throw "Installer was not generated: $installer" }
+          if (!(Test-Path "dist/latest.yml")) { throw "latest.yml was not generated." }
+          if (!(Test-Path $blockmap)) { throw "NSIS blockmap was not generated: $blockmap" }
+          Write-Host "Desktop version: $version"
+          Get-Content "dist/latest.yml"
+          Get-ChildItem dist
+
+      - name: Create release notes
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          @"
+          TITV 工程部製播排班系統 Desktop $version
+
+          系統核心：V3.30.7
+
+          本版更新：
+          - 更新至 TITV 製播排班系統 V3.30.7。
+          - 修復 employees.hire_date 與 leaves.leave_meta 雲端同步與 schema cache。
+          - 新增 Windows 桌面版自動更新機制。
+          - 軟體啟動後自動檢查更新，並每 4 小時再次檢查。
+          - 新版會自動下載，下載完成後可立即重新啟動安裝，或稍後於關閉軟體時安裝。
+          - 保留 TITV 原民台軟體圖示、Supabase 即時資料、LINE／Email／輸出功能。
+          "@ | Set-Content -Path "release_notes.md" -Encoding UTF8
+
+      - name: Publish GitHub auto-update release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "titv-desktop-v$version"
+          $repository = "thewritethatstaysmusic2025-cmyk/register"
+          $installer = "dist/TITV_Engineering_Scheduler_Setup_$($version)_x64.exe"
+          $blockmap = "$installer.blockmap"
+
+          gh release view $tag --repo $repository *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release delete $tag --repo $repository --cleanup-tag --yes
+          }
+
+          $releaseArgs = @(
+            "release", "create", $tag,
+            $installer,
+            "dist/latest.yml",
+            $blockmap,
+            "--repo", $repository,
+            "--target", $env:GITHUB_SHA,
+            "--title", "TITV Desktop $version",
+            "--notes-file", "release_notes.md",
+            "--latest"
+          )
+          gh @releaseArgs
+          if ($LASTEXITCODE -ne 0) { throw "GitHub release publication failed." }
+
+      - name: Verify published release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "titv-desktop-v$version"
+          gh release view $tag --repo "thewritethatstaysmusic2025-cmyk/register" --json tagName,isLatest,assets,url
+
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TITV-Windows-Installer-4.0.2
-          path: titv-desktop/dist/*Setup*.exe
+          name: TITV-Windows-Desktop-4.0.3-AutoUpdate
+          path: |
+            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.3_x64.exe
+            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.3_x64.exe.blockmap
+            titv-desktop/dist/latest.yml
           if-no-files-found: error
