@@ -8,6 +8,7 @@ app.setName(APP_NAME);
 function createWindow() {
   const win = new BrowserWindow({
     title: APP_NAME,
+    icon: path.join(__dirname, 'app', 'android-chrome-192x192.png'),
     width: 1680,
     height: 1030,
     minWidth: 1180,
