@@ -1,6 +1,6 @@
 {
   "name": "titv-engineering-scheduler-desktop",
-  "version": "4.0.3",
+  "version": "4.0.4",
   "private": true,
   "description": "TITV 工程部製播排班系統 Windows Desktop",
   "main": "main.cjs",
