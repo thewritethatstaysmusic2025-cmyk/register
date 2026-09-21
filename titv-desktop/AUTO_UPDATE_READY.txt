@@ -1,0 +1,3 @@
+TITV Desktop 4.0.3
+Core: V3.30.7
+Auto-update: GitHub Releases + electron-updater
