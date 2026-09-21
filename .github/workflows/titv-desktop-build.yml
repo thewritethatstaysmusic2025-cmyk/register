@@ -13,6 +13,7 @@ jobs:
     defaults:
       run:
         working-directory: titv-desktop
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,26 +23,60 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Prepare app files
+      - name: Prepare V3.30.5 desktop app
         shell: pwsh
         run: |
+          $base = "https://6ab0b5600d26a5471dd4a27b--titv-engineering-scheduler.netlify.app"
+
           New-Item -ItemType Directory -Force -Path app/vendor | Out-Null
-          Invoke-WebRequest -Uri "https://titv-engineering-scheduler.netlify.app/" -OutFile "app/index.html"
-          Invoke-WebRequest -Uri "https://titv-engineering-scheduler.netlify.app/vendor/jszip.min.js" -OutFile "app/vendor/jszip.min.js"
+          New-Item -ItemType Directory -Force -Path build | Out-Null
+
+          # Pin the exact production deployment that contains V3.30.5.
+          Invoke-WebRequest -Uri "$base/RELEASE_NOTES_V3.30.5.txt" -OutFile "app/RELEASE_NOTES_V3.30.5.txt"
+          $release = Get-Content "app/RELEASE_NOTES_V3.30.5.txt" -Raw
+          if ($release -notmatch "V3\.30\.5") {
+            throw "The pinned deploy is not V3.30.5."
+          }
+
+          Invoke-WebRequest -Uri "$base/" -OutFile "app/index.html"
+          Invoke-WebRequest -Uri "$base/vendor/jszip.min.js" -OutFile "app/vendor/jszip.min.js"
+          Invoke-WebRequest -Uri "$base/TITV_LOGO.png" -OutFile "app/TITV_LOGO.png"
+          Invoke-WebRequest -Uri "$base/favicon.ico" -OutFile "app/favicon.ico"
+          Invoke-WebRequest -Uri "$base/favicon-32x32.png" -OutFile "app/favicon-32x32.png"
+          Invoke-WebRequest -Uri "$base/apple-touch-icon.png" -OutFile "app/apple-touch-icon.png"
+          Invoke-WebRequest -Uri "$base/android-chrome-192x192.png" -OutFile "app/android-chrome-192x192.png"
+          Invoke-WebRequest -Uri "$base/site.webmanifest" -OutFile "app/site.webmanifest"
+
+          # Desktop build uses the same Netlify backend for LINE and holiday APIs.
           $p = Resolve-Path "app/index.html"
           $s = [System.IO.File]::ReadAllText($p, [System.Text.Encoding]::UTF8)
-          $base = "https://titv-engineering-scheduler.netlify.app"
-          $s = $s.Replace('fetch(`/.netlify/functions/', 'fetch(`' + $base + '/.netlify/functions/')
-          $s = $s.Replace("fetch('/.netlify/functions/", "fetch('" + $base + "/.netlify/functions/")
-          $s = $s.Replace('fetch("/.netlify/functions/', 'fetch("' + $base + '/.netlify/functions/')
-          $s = $s.Replace('${location.origin}/line-webhook', $base + '/line-webhook')
-          $s = $s.Replace('${location.origin}', $base)
+          $publicBase = "https://titv-engineering-scheduler.netlify.app"
+          $s = $s.Replace('fetch(`/.netlify/functions/', 'fetch(`' + $publicBase + '/.netlify/functions/')
+          $s = $s.Replace("fetch('/.netlify/functions/", "fetch('" + $publicBase + "/.netlify/functions/")
+          $s = $s.Replace('fetch("/.netlify/functions/', 'fetch("' + $publicBase + '/.netlify/functions/')
+          $s = $s.Replace('${location.origin}/line-webhook', $publicBase + '/line-webhook')
+          $s = $s.Replace('${location.origin}', $publicBase)
           [System.IO.File]::WriteAllText($p, $s, [System.Text.UTF8Encoding]::new($false))
+
+          # Build a square Windows app icon from the official TITV red/gold emblem.
+          Add-Type -AssemblyName System.Drawing
+          $src = [System.Drawing.Image]::FromFile((Resolve-Path "app/android-chrome-192x192.png"))
+          $bmp = New-Object System.Drawing.Bitmap 512, 512
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.Clear([System.Drawing.Color]::Transparent)
+          $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+          $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+          $g.DrawImage($src, 0, 0, 512, 512)
+          $bmp.Save((Join-Path (Get-Location) "build/icon.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose()
+          $bmp.Dispose()
+          $src.Dispose()
 
       - name: Install dependencies
         run: npm install
 
-      - name: Build installer
+      - name: Build Windows installer
         run: npm run dist
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
@@ -49,6 +84,6 @@ jobs:
       - name: Upload installer
         uses: actions/upload-artifact@v4
         with:
-          name: TITV-Windows-Installer
+          name: TITV-Windows-Installer-4.0.2
           path: titv-desktop/dist/*Setup*.exe
           if-no-files-found: error
