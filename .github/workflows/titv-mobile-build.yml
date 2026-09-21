@@ -1,0 +1,155 @@
+name: Build TITV Android and iOS
+
+on:
+  push:
+    branches:
+      - titv-mobile-build
+  workflow_dispatch:
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: titv-mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prepare V3.30.5 app bundle
+        run: node prepare-mobile.mjs
+
+      - name: Create 1024 icon and splash source
+        shell: bash
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+
+          src = Image.open('assets/source-icon.png').convert('RGBA')
+          icon = src.resize((1024, 1024), Image.Resampling.LANCZOS)
+          icon.save('assets/icon.png')
+
+          bg = Image.new('RGBA', (2732, 2732), (244, 241, 234, 255))
+          logo = src.copy()
+          logo.thumbnail((1050, 1050), Image.Resampling.LANCZOS)
+          x = (2732 - logo.width) // 2
+          y = (2732 - logo.height) // 2
+          bg.alpha_composite(logo, (x, y))
+          bg.save('assets/splash.png')
+          PY
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Generate Android app icons
+        run: npx @capacitor/assets generate --android --assetPath assets --iconBackgroundColor '#F4F1EA' --splashBackgroundColor '#F4F1EA'
+
+      - name: Sync Android
+        run: npx cap sync android
+
+      - name: Build installable APK
+        shell: bash
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+          cp app/build/outputs/apk/debug/app-debug.apk ../TITV_工程部製播排班系統_Android_4.0.2.apk
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-Android-4.0.2
+          path: titv-mobile/TITV_工程部製播排班系統_Android_4.0.2.apk
+          if-no-files-found: error
+
+  ios:
+    name: iOS App
+    runs-on: macos-14
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: titv-mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Prepare V3.30.5 app bundle
+        run: node prepare-mobile.mjs
+
+      - name: Create iOS icon and splash source
+        shell: bash
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 - <<'PY'
+          from PIL import Image
+          src = Image.open('assets/source-icon.png').convert('RGBA')
+          src.resize((1024, 1024), Image.Resampling.LANCZOS).save('assets/icon.png')
+          bg = Image.new('RGBA', (2732, 2732), (244, 241, 234, 255))
+          logo = src.copy()
+          logo.thumbnail((1050, 1050), Image.Resampling.LANCZOS)
+          bg.alpha_composite(logo, ((2732-logo.width)//2, (2732-logo.height)//2))
+          bg.save('assets/splash.png')
+          PY
+
+      - name: Add iOS platform
+        run: npx cap add ios
+
+      - name: Generate iOS app icons
+        run: npx @capacitor/assets generate --ios --assetPath assets --splashBackgroundColor '#F4F1EA'
+
+      - name: Sync iOS
+        run: npx cap sync ios
+
+      - name: Build iOS Simulator app
+        shell: bash
+        run: |
+          xcodebuild             -workspace ios/App/App.xcworkspace             -scheme App             -configuration Release             -sdk iphonesimulator             -derivedDataPath build/ios-simulator             CODE_SIGNING_ALLOWED=NO             build
+          ditto -c -k --sequesterRsrc --keepParent             build/ios-simulator/Build/Products/Release-iphonesimulator/App.app             TITV_工程部製播排班系統_iOS_Simulator_4.0.2.zip
+
+      - name: Build unsigned iPhone app
+        shell: bash
+        run: |
+          xcodebuild             -workspace ios/App/App.xcworkspace             -scheme App             -configuration Release             -sdk iphoneos             -derivedDataPath build/ios-device             CODE_SIGNING_ALLOWED=NO             build
+
+          rm -rf Payload
+          mkdir Payload
+          cp -R build/ios-device/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry TITV_工程部製播排班系統_iOS_Unsigned_4.0.2.ipa Payload
+
+      - name: Package Xcode project
+        shell: bash
+        run: |
+          zip -qry TITV_工程部製播排班系統_iOS_Xcode_Project_4.0.2.zip             ios capacitor.config.ts package.json package-lock.json www assets
+
+      - name: Upload iOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-iOS-4.0.2
+          path: |
+            titv-mobile/TITV_工程部製播排班系統_iOS_Unsigned_4.0.2.ipa
+            titv-mobile/TITV_工程部製播排班系統_iOS_Simulator_4.0.2.zip
+            titv-mobile/TITV_工程部製播排班系統_iOS_Xcode_Project_4.0.2.zip
+          if-no-files-found: error
