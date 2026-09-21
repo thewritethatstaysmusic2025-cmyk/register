@@ -1,0 +1,54 @@
+name: Build TITV Windows Installer
+
+on:
+  push:
+    branches:
+      - titv-desktop-build
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: titv-desktop
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prepare app files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path app/vendor | Out-Null
+          Invoke-WebRequest -Uri "https://titv-engineering-scheduler.netlify.app/" -OutFile "app/index.html"
+          Invoke-WebRequest -Uri "https://titv-engineering-scheduler.netlify.app/vendor/jszip.min.js" -OutFile "app/vendor/jszip.min.js"
+          $p = Resolve-Path "app/index.html"
+          $s = [System.IO.File]::ReadAllText($p, [System.Text.Encoding]::UTF8)
+          $base = "https://titv-engineering-scheduler.netlify.app"
+          $s = $s.Replace('fetch(`/.netlify/functions/', 'fetch(`' + $base + '/.netlify/functions/')
+          $s = $s.Replace("fetch('/.netlify/functions/", "fetch('" + $base + "/.netlify/functions/")
+          $s = $s.Replace('fetch("/.netlify/functions/', 'fetch("' + $base + '/.netlify/functions/')
+          $s = $s.Replace('${location.origin}/line-webhook', $base + '/line-webhook')
+          $s = $s.Replace('${location.origin}', $base)
+          [System.IO.File]::WriteAllText($p, $s, [System.Text.UTF8Encoding]::new($false))
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build installer
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-Windows-Installer
+          path: titv-desktop/dist/*Setup*.exe
+          if-no-files-found: error
