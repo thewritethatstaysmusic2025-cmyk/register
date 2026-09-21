@@ -128,13 +128,13 @@ jobs:
       - name: Build iOS Simulator app
         shell: bash
         run: |
-          xcodebuild             -workspace ios/App/App.xcworkspace             -scheme App             -configuration Release             -sdk iphonesimulator             -derivedDataPath build/ios-simulator             CODE_SIGNING_ALLOWED=NO             build
+          xcodebuild             -project ios/App/App.xcodeproj             -scheme App             -configuration Release             -sdk iphonesimulator             -derivedDataPath build/ios-simulator             CODE_SIGNING_ALLOWED=NO             build
           ditto -c -k --sequesterRsrc --keepParent             build/ios-simulator/Build/Products/Release-iphonesimulator/App.app             TITV_工程部製播排班系統_iOS_Simulator_4.0.2.zip
 
       - name: Build unsigned iPhone app
         shell: bash
         run: |
-          xcodebuild             -workspace ios/App/App.xcworkspace             -scheme App             -configuration Release             -sdk iphoneos             -derivedDataPath build/ios-device             CODE_SIGNING_ALLOWED=NO             build
+          xcodebuild             -project ios/App/App.xcodeproj             -scheme App             -configuration Release             -sdk iphoneos             -derivedDataPath build/ios-device             CODE_SIGNING_ALLOWED=NO             build
 
           rm -rf Payload
           mkdir Payload
