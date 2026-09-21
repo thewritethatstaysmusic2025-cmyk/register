@@ -107,8 +107,8 @@ jobs:
           本版更新：
           - 更新至 TITV 製播排班系統 V3.30.7。
           - 修復 employees.hire_date 與 leaves.leave_meta 雲端同步與 schema cache。
-          - 新增 Windows 桌面版自動更新機制。
-          - 軟體啟動後自動檢查更新，並每 4 小時再次檢查。
+          - 驗證 Windows 桌面版第一輪自動更新升級流程。
+          - 保留啟動後自動檢查更新與每 4 小時再次檢查。
           - 新版會自動下載，下載完成後可立即重新啟動安裝，或稍後於關閉軟體時安裝。
           - 保留 TITV 原民台軟體圖示、Supabase 即時資料、LINE／Email／輸出功能。
           "@ | Set-Content -Path "release_notes.md" -Encoding UTF8
@@ -155,9 +155,9 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TITV-Windows-Desktop-4.0.3-AutoUpdate
+          name: TITV-Windows-Desktop-4.0.4-AutoUpdate
           path: |
-            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.3_x64.exe
-            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.3_x64.exe.blockmap
+            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.4_x64.exe
+            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.4_x64.exe.blockmap
             titv-desktop/dist/latest.yml
           if-no-files-found: error
