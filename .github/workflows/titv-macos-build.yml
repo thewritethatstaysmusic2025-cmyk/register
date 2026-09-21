@@ -1,0 +1,104 @@
+name: Build TITV macOS DMG
+
+on:
+  push:
+    branches:
+      - titv-macos-build
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: titv-desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prepare V3.30.5 macOS app
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          base="https://6ab0b5600d26a5471dd4a27b--titv-engineering-scheduler.netlify.app"
+          publicBase="https://titv-engineering-scheduler.netlify.app"
+
+          mkdir -p app/vendor build
+
+          curl -fL "$base/RELEASE_NOTES_V3.30.5.txt" -o app/RELEASE_NOTES_V3.30.5.txt
+          grep -q "V3.30.5" app/RELEASE_NOTES_V3.30.5.txt
+
+          curl -fL "$base/" -o app/index.html
+          curl -fL "$base/vendor/jszip.min.js" -o app/vendor/jszip.min.js
+          curl -fL "$base/TITV_LOGO.png" -o app/TITV_LOGO.png
+          curl -fL "$base/favicon.ico" -o app/favicon.ico
+          curl -fL "$base/favicon-32x32.png" -o app/favicon-32x32.png
+          curl -fL "$base/apple-touch-icon.png" -o app/apple-touch-icon.png
+          curl -fL "$base/android-chrome-192x192.png" -o app/android-chrome-192x192.png
+          curl -fL "$base/site.webmanifest" -o app/site.webmanifest
+
+          if curl -fsSL "$base/android-chrome-512x512.png" -o build/icon-source.png; then
+            echo "Using 512x512 TITV icon source."
+          else
+            cp app/android-chrome-192x192.png build/icon-source.png
+            echo "Using 192x192 TITV icon source."
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/index.html")
+          s = p.read_text(encoding="utf-8")
+          public_base = "https://titv-engineering-scheduler.netlify.app"
+          s = s.replace("fetch(`/.netlify/functions/", "fetch(`" + public_base + "/.netlify/functions/")
+          s = s.replace("fetch('/.netlify/functions/", "fetch('" + public_base + "/.netlify/functions/")
+          s = s.replace('fetch("/.netlify/functions/', 'fetch("' + public_base + '/.netlify/functions/')
+          s = s.replace("${location.origin}/line-webhook", public_base + "/line-webhook")
+          s = s.replace("${location.origin}", public_base)
+          p.write_text(s, encoding="utf-8")
+          PY
+
+          rm -rf build/icon.iconset
+          mkdir -p build/icon.iconset
+
+          sips -z 16 16 build/icon-source.png --out build/icon.iconset/icon_16x16.png >/dev/null
+          sips -z 32 32 build/icon-source.png --out build/icon.iconset/icon_16x16@2x.png >/dev/null
+          sips -z 32 32 build/icon-source.png --out build/icon.iconset/icon_32x32.png >/dev/null
+          sips -z 64 64 build/icon-source.png --out build/icon.iconset/icon_32x32@2x.png >/dev/null
+          sips -z 128 128 build/icon-source.png --out build/icon.iconset/icon_128x128.png >/dev/null
+          sips -z 256 256 build/icon-source.png --out build/icon.iconset/icon_128x128@2x.png >/dev/null
+          sips -z 256 256 build/icon-source.png --out build/icon.iconset/icon_256x256.png >/dev/null
+          sips -z 512 512 build/icon-source.png --out build/icon.iconset/icon_256x256@2x.png >/dev/null
+          sips -z 512 512 build/icon-source.png --out build/icon.iconset/icon_512x512.png >/dev/null
+          sips -z 1024 1024 build/icon-source.png --out build/icon.iconset/icon_512x512@2x.png >/dev/null
+          iconutil -c icns build/icon.iconset -o build/icon.icns
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Apple Silicon DMG
+        run: npm run dist:mac:arm64
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: Build Intel DMG
+        run: npm run dist:mac:x64
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+
+      - name: List outputs
+        run: ls -lah dist
+
+      - name: Upload macOS installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-macOS-Installers-4.0.2
+          path: titv-desktop/dist/*.dmg
+          if-no-files-found: error
