@@ -80,7 +80,7 @@ jobs:
 
   ios:
     name: iOS App
-    runs-on: macos-14
+    runs-on: macos-26
     timeout-minutes: 45
     defaults:
       run:
