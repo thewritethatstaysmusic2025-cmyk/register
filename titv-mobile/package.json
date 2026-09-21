@@ -1,0 +1,25 @@
+{
+  "name": "titv-engineering-scheduler-mobile",
+  "version": "4.0.2",
+  "private": true,
+  "type": "module",
+  "description": "TITV 工程部製播排班系統 Android / iOS",
+  "scripts": {
+    "cap:sync": "npx cap sync",
+    "cap:android": "npx cap add android",
+    "cap:ios": "npx cap add ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.0.0",
+    "@capacitor/app": "8.0.0",
+    "@capacitor/core": "8.0.0",
+    "@capacitor/ios": "8.0.0",
+    "@capacitor/network": "8.0.0",
+    "@capacitor/splash-screen": "8.0.0",
+    "@capacitor/status-bar": "8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "8.0.0"
+  }
+}
