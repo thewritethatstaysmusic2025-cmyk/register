@@ -40,7 +40,6 @@
     "dmg": {
       "title": "TITV 工程部製播排班系統 ${version}",
       "icon": "build/icon.icns",
-      "backgroundColor": "#F4F1EA",
       "contents": [
         {
           "x": 150,
