@@ -1,0 +1,143 @@
+name: TITV 4.0.13 half-day verified delivery
+on:
+  push:
+    branches: [titv-desktop-406-halfday]
+    paths: [.github/workflows/titv413-delivery.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: titv413-delivery
+  cancel-in-progress: false
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: titv-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned build tools
+        shell: pwsh
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version='4.0.13';fs.writeFileSync('package.json',JSON.stringify(p,null,2));"
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Installation failed' }
+      - name: Prepare shared UI and half-day implementation
+        shell: pwsh
+        run: |
+          npm run prepare:ui
+          if ($LASTEXITCODE -ne 0) { throw 'Base UI preparation failed' }
+          node adjust406.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Half-day lifecycle preparation failed' }
+          node halfday406.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Half-day preparation failed' }
+          @'
+          const fs=require('fs'),crypto=require('crypto');
+          const hash=s=>crypto.createHash('sha256').update(s).digest('hex');
+          for(const f of ['app/index.html','web-overlay/index.html','test406.mjs']){
+            let s=fs.readFileSync(f,'utf8').replaceAll('4.0.6','4.0.13').replaceAll('V3.33.9','V3.33.10').replaceAll('>V3.33.8<','>V3.33.10<').replace('halfDayCount:0.5,conflicts,','halfDayCount:0.5,conflicts:conflict,');
+            fs.writeFileSync(f,s);
+          }
+          fs.writeFileSync('preload.cjs',fs.readFileSync('preload.cjs','utf8').replaceAll('4.0.5','4.0.13'));
+          fs.writeFileSync('runtime/main.cjs',fs.readFileSync('runtime/main.cjs','utf8').replaceAll('V3.33.8','V3.33.10').replace('UI 修正版','台內半天休假'));
+          fs.writeFileSync('smoke413.mjs',fs.readFileSync('smoke405.mjs','utf8').replaceAll('4.0.5','4.0.13').replaceAll('V3.33.8','V3.33.10'));
+          const manifest={desktopVersion:'4.0.13',coreVersion:'V3.33.10',feature:'台內半天休假',webSha256:hash(fs.readFileSync('web-overlay/index.html')),desktopSha256:hash(fs.readFileSync('app/index.html')),sharedBusinessLogic:true,webProductionDeployed:false,schemaMigrationRequired:false,metadataContract:{unit:'hour',duration:'half_day',day_fraction:0.5}};
+          for(const f of ['app/repair-info.json','web-overlay/release-info.json','qa/manifest413.json'])fs.writeFileSync(f,JSON.stringify(manifest,null,2));
+          fs.writeFileSync('web-overlay/NOT_A_FULL_NETLIFY_DEPLOY.txt','此 ZIP 為與 Desktop 4.0.13 相同核心 V3.33.10 的前端修正檔，不是完整 Netlify 部署包。必須先合併至目前正式專案，保留 netlify/functions、_headers、_redirects、netlify.toml、vendor 與現有資產。不要直接以此 ZIP 覆蓋整個 Netlify 正式站。本次正式站未更新，避免移除既有 LINE 後端。');
+          '@ | Set-Content patch413.cjs -Encoding utf8
+          node patch413.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Version reconciliation failed' }
+      - name: Install test browser
+        run: npx playwright install chromium
+      - name: Verify web and desktop half-day workflows
+        shell: pwsh
+        run: |
+          node test406.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Half-day UI tests failed' }
+      - name: Prepare unchanged TITV icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $src=[Drawing.Image]::FromFile((Resolve-Path 'app/android-chrome-192x192.png'))
+          $bmp=New-Object Drawing.Bitmap 512,512
+          $g=[Drawing.Graphics]::FromImage($bmp)
+          $g.Clear([Drawing.Color]::Transparent)
+          $g.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $g.DrawImage($src,0,0,512,512)
+          $bmp.Save((Join-Path (Get-Location) 'build/icon.png'),[Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose();$bmp.Dispose();$src.Dispose()
+      - name: Build actual Windows installer
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Test packaged Windows application
+        shell: pwsh
+        run: |
+          node smoke413.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged Windows test failed' }
+      - name: Assemble verified delivery and honest deployment status
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force delivery | Out-Null
+          @'
+          const fs=require('fs'),crypto=require('crypto'),assert=require('assert/strict');
+          const f='dist/TITV_Engineering_Scheduler_Setup_4.0.13_x64.exe',b=fs.readFileSync(f),yaml=fs.readFileSync('dist/latest.yml','utf8');
+          assert(yaml.includes('version: 4.0.13'));assert(yaml.includes(crypto.createHash('sha512').update(b).digest('base64')));
+          const ui=JSON.parse(fs.readFileSync('qa/halfday-test-report.json')),windows=JSON.parse(fs.readFileSync('qa/windows-smoke.json'));assert(ui.passed&&windows.passed);
+          const r={version:'4.0.13',core:'V3.33.10',signed:false,installerBytes:b.length,sha256:crypto.createHash('sha256').update(b).digest('hex'),uiTests:ui,windowsSmoke:windows,webProductionDeployed:false,webDeploymentBlocker:'The authorized Netlify deployment proxy supports full source builds, not partial-file deployments. The current complete source bundle with existing backend functions is needed. The production site remains untouched.',verifiedManifest:JSON.parse(fs.readFileSync('qa/manifest413.json'))};
+          fs.writeFileSync('delivery/TEST_REPORT.json',JSON.stringify(r,null,2));fs.writeFileSync('delivery/SHA256SUMS.txt',r.sha256+'  TITV_Engineering_Scheduler_Setup_4.0.13_x64.exe\n');
+          console.log(JSON.stringify({version:r.version,core:r.core,sha256:r.sha256,installerBytes:r.installerBytes,uiPassed:ui.passed,windowsPassed:windows.passed,webProductionDeployed:false}));
+          '@ | Set-Content report413.cjs -Encoding utf8
+          node report413.cjs
+          if ($LASTEXITCODE -ne 0) { throw 'Manifest integrity failed' }
+          Copy-Item dist/TITV_Engineering_Scheduler_Setup_4.0.13_x64.exe delivery/
+          Compress-Archive -Path web-overlay/index.html,web-overlay/ui-icons.mjs,web-overlay/ui-icons.css,web-overlay/release-info.json,web-overlay/NOT_A_FULL_NETLIFY_DEPLOY.txt -DestinationPath delivery/TITV_Web_V3.33.10_HalfDay_Frontend_Only.zip -Force
+          @'
+          TITV Desktop 4.0.13 / Core V3.33.10
+          台內狀態新增半天（0.5 日），既有台內休假可選半天單位，保留原假別代碼。
+          半天提供自訂起訖、上午及下午可調整預設；衝突檢查只涵蓋核准時段。
+          休假表、週間摘要、圖檔、列印及 Excel 保留半天與起訖。
+          修正時間選擇器在休假視窗關閉後殘留，避免擋住按鈕。
+          保留 TITV 圖示與 UI 防重複修正。關於視窗與主畫面版本一致。
+          前端網頁程式與桌面版同一核心；Netlify 正式站尚未發布此更新，現有後端未變動。Frontend_Only ZIP 必須合併至完整原專案，不可單獨取代正式站。
+          Windows 安裝檔未簽署發行者憑證。測試採隔離資料及 Windows 封裝啟動，未代替使用者實測正式帳號登入、多裝置更新或通知發送。
+          '@ | Set-Content release413-notes.txt -Encoding utf8
+      - name: Publish new Windows update without changing web production
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $latest=gh release view --repo "$env:GITHUB_REPOSITORY" --json tagName | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot confirm latest release' }
+          if ([version]($latest.tagName -replace '^v','') -ge [version]'4.0.13') { throw 'A newer or identical release exists. Refusing to overwrite.' }
+          gh release create v4.0.13 dist/TITV_Engineering_Scheduler_Setup_4.0.13_x64.exe dist/TITV_Engineering_Scheduler_Setup_4.0.13_x64.exe.blockmap dist/latest.yml delivery/TEST_REPORT.json delivery/SHA256SUMS.txt delivery/TITV_Web_V3.33.10_HalfDay_Frontend_Only.zip --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title 'TITV Desktop 4.0.13 — 台內半天休假' --notes-file release413-notes.txt --draft
+          if ($LASTEXITCODE -ne 0) { throw 'Upload failed' }
+          gh release edit v4.0.13 --repo "$env:GITHUB_REPOSITORY" --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Publish failed' }
+          gh release view v4.0.13 --repo "$env:GITHUB_REPOSITORY" --json tagName,assets,url
+      - name: Store verified test report and lockfile on working branch
+        shell: pwsh
+        run: |
+          Copy-Item delivery/TEST_REPORT.json qa/release413-report.json
+          git config user.name 'TITV Release Verification'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add qa/release413-report.json package.json package-lock.json preload.cjs runtime/main.cjs
+          git commit -m '[skip ci] Record verified 4.0.13 build and frontend deployment boundary'
+          git push origin HEAD:titv-desktop-406-halfday
+      - name: Upload delivery
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-4.0.13-HalfDay-Verified
+          path: |
+            titv-desktop/delivery/*
+            titv-desktop/qa/*.json
+            titv-desktop/qa/screenshots/*halfday*.png
+            titv-desktop/qa/screenshots/windows-packaged-login.png
+          retention-days: 30
+          if-no-files-found: warn
