@@ -1,0 +1,153 @@
+3850: function roleLabel(role){return ({owner:'OWNER',admin:'ADMIN',scheduler:'SCHEDULER',member:'MEMBER',viewer:'員工唯讀'})[role]||String(role||'OWNER').toUpperCase()}
+3851: function canEdit(){if(viewerMode)return false;return !cloudActive()||['owner','admin','scheduler'].includes(currentMembership?.role)}
+3852: function canAdmin(){if(viewerMode)return false;return !cloudActive()||['owner','admin'].includes(currentMembership?.role)}
+3853: function cloudActive(){return !!(supabase&&cloudUser&&currentOrg?.id&&!cloudBypass)}
+3854: function isCloudConfigured(){return !!(cloudCfg.enabled&&cloudCfg.url&&cloudCfg.key)}
+3855: 
+3856: function seedState(){
+3857:   const names=['趙振岳','晟植','麗權','志宏','阿比','阿道','維銘','高林','尚仁','冠維','韓睿','光天','小滄','昊蓁','揚慈'];
+3858:   const roleMap={
+3859:     '趙振岳':['TD'],'晟植':['TD'],'麗權':['TD'],'志宏':['TD'],'阿比':['TD'],'阿道':['TD','CAM'],
+3860:     '維銘':['CAM'],'高林':['CAM','VE'],'尚仁':['CAM','VE'],'冠維':['CAM','VE'],'韓睿':['CAM'],
+3861:     '光天':['AE'],'小滄':['AE'],'昊蓁':['AE'],'揚慈':['AE']
+3862:   };
+3863:   const employees=names.map((name,i)=>({id:uuid(),name,email:'',hireDate:'',roles:roleMap[name]||['CAM'],active:true,order:i+1,note:'',notifyPublish:true,notifyChange:true,notifyEmergency:true,notifyCancel:true}));
+3864:   const byName=n=>employees.find(e=>e.name===n)?.id||'';
+3865:   const req=(TD=1,CAM=1,VE=0,AE=1,PD=0,AD=0)=>({PD,AD,TD,CAM,VE,AE});
+3866:   const ass=(TD='',CAM=[],VE='',AE='')=>({PD:[],AD:[],TD:TD?[byName(TD)]:[],CAM:CAM.map(byName).filter(Boolean),VE:VE?[byName(VE)]:[],AE:AE?[byName(AE)]:[]});
+3867:   const ev=(date,start,end,title,type,TD,CAM,VE,AE,location='新聞棚')=>({id:uuid(),date,start,end,title,type,location,notes:'',status:'draft',color:defaultEventColor(type),required:type==='meeting'?req(0,0,0,0):req(1,CAM.length||1,VE?1:0,1),assignments:ass(TD,CAM,VE,AE),updatedAt:new Date().toISOString()});
+3868:   const events=[
+3869:     ev('2026-09-14','10:30','11:20','午間看見族語','record','趙振岳',['韓睿'],'','昊蓁','A 棚'),
+3870:     ev('2026-09-14','11:30','12:50','午間新聞','news','晟植',['維銘'],'','昊蓁'),
+3871:     ev('2026-09-14','13:30','14:30','1400 看見族語預錄','record','晟植',['尚仁'],'','小滄','A 棚'),
+3872:     ev('2026-09-14','16:30','17:30','1700 氣象預錄','weather','志宏',['維銘','韓睿'],'','揚慈','氣象棚'),
+3873:     ev('2026-09-14','18:30','19:40','晚間新聞','news','志宏',['尚仁'],'','揚慈'),
+3874:     ev('2026-09-15','10:30','11:20','午間看見族語','record','志宏',['冠維'],'','光天','A 棚'),
+3875:     ev('2026-09-15','11:30','12:50','午間新聞','news','麗權',['韓睿'],'','昊蓁'),
+3876:     ev('2026-09-15','13:30','14:30','1400 看見族語預錄','record','阿比',['維銘'],'尚仁','小滄','A 棚'),
+3877:     ev('2026-09-15','16:30','17:30','1700 氣象預錄','weather','麗權',['阿道','尚仁'],'','昊蓁','氣象棚'),
+3918: function saveLocalState(){if(state?.audits)state.audits=state.audits.slice(0,25);if(storageSet(STORAGE_KEY,JSON.stringify(state)))return true;try{if($('toastStack'))toast('本機資料暫存失敗','瀏覽器儲存空間可能不足或已停用；雲端資料不受影響。','warning')}catch(_e){}return false}
+3919: state=loadLocalState();
+3920: function loadCloudCfg(){
+3921:   const embedded=window.SCHEDULER_CONFIG||{};
+3922:   try{const saved=JSON.parse(storageGet(CLOUD_KEY,'{}')||'{}');return {url:embedded.supabaseUrl||saved.url||'',key:embedded.supabaseKey||saved.key||'',enabled:Boolean(embedded.forceCloud||saved.enabled||(embedded.supabaseUrl&&embedded.supabaseKey)),forceCloud:Boolean(embedded.forceCloud)}}catch{return {url:embedded.supabaseUrl||'',key:embedded.supabaseKey||'',enabled:Boolean(embedded.supabaseUrl&&embedded.supabaseKey),forceCloud:Boolean(embedded.forceCloud)}}
+3923: }
+3924: function saveCloudCfg(){storageSet(CLOUD_KEY,JSON.stringify({url:cloudCfg.url,key:cloudCfg.key,enabled:cloudCfg.enabled}))}
+3925: function audit(action,entityType,description){
+3926:   const row={id:uuid(),createdAt:new Date().toISOString(),actor:cloudUser?.user_metadata?.display_name||cloudUser?.email||'本機管理員',action,entityType,description};
+3927:   state.audits=[row,...(state.audits||[])].slice(0,25);saveLocalState();
+3928:   if(currentView==='audit')renderAudit();
+3929:   /* 雲端模式的 audit 由 PostgreSQL trigger 伺服器端寫入，避免前端偽造或重複。 */
+3930: }
+3931: 
+3932: function toast(title,message='',type='success'){
+3933:   const el=document.createElement('div');el.className=`toast ${type}`;el.innerHTML=`<span class="status-dot ${type==='success'?'online':type==='warning'?'warning':'local'}"></span><div><strong>${esc(title)}</strong>${message?`<p>${esc(message)}</p>`:''}</div>`;$('toastStack').appendChild(el);setTimeout(()=>el.remove(),4200);
+3934: }
+3935: function authMessage(message,type=''){const box=$('authMessage');box.className=`auth-message ${type}`;box.textContent=message;box.classList.remove('hidden')}
+3936: function clearAuthMessage(){$('authMessage').classList.add('hidden');$('authMessage').textContent=''}
+3937: function setAuthConnectionState(state='connecting',message=''){const el=$('authConnectionStatus');if(!el)return;el.dataset.state=state;const label=el.querySelector('span:last-child');if(label)label.textContent=message||(state==='ready'?'雲端服務已連線':state==='error'?'雲端服務連線失敗':'正在連線雲端服務…');}
+3938: function normalizeEmail(value=''){return String(value).trim().toLowerCase()}
+3939: function normalizeEmployeeNumber(value=''){return String(value||'').trim().toUpperCase().replace(/\s+/g,'')}
+3940: function friendlyAuthError(error){
+3941:   const msg=String(error?.message||error||'').trim();
+3942:   if(/already registered|user already exists/i.test(msg))return '此電子郵件已註冊，請直接登入或使用忘記密碼。';
+3964: let mobileSidebarScroll=null;
+3965: function setMobileSidebar(open){
+3966:   const mobile=innerWidth<=900,shown=Boolean(open&&mobile);
+3967:   const sidebar=$('sidebar'),main=document.querySelector('#appShell > .main-shell');
+3968:   const wasOpen=sidebar?.classList.contains('open');
+3969:   const returnFocus=!shown&&wasOpen&&sidebar?.contains(document.activeElement);
+3970:   if(shown&&!mobileSidebarScroll){
+3971:     mobileSidebarScroll={x:window.scrollX,y:window.scrollY};
+3972:     document.body.style.setProperty('--sidebar-scroll-top',`${-mobileSidebarScroll.y}px`);
+3973:   }
+3974:   sidebar?.classList.toggle('open',shown);
+3975:   $('sidebarScrim')?.classList.toggle('hidden',!shown);
+3976:   document.body.classList.toggle('sidebar-open',shown);
+3977:   if(sidebar){sidebar.inert=mobile&&!shown;sidebar.setAttribute('aria-hidden',String(mobile&&!shown));}
+3978:   if(main)main.inert=shown;
+3979:   $('mobileMenuBtn')?.setAttribute('aria-expanded',String(shown));
+3980:   if(!shown&&mobileSidebarScroll){
+3981:     const position=mobileSidebarScroll;mobileSidebarScroll=null;
+3982:     document.body.style.removeProperty('--sidebar-scroll-top');
+3983:     window.scrollTo(position.x,position.y);
+3984:   }
+3985:   if(shown&&!wasOpen)$('sidebarCloseBtn')?.focus({preventScroll:true});
+3986:   else if(returnFocus&&mobile)$('mobileMenuBtn')?.focus({preventScroll:true});
+3987: }
+3988: function syncEditorViewport(){
+4461: }
+4462: function renderPrintSchedule(){
+4463:   const host=$('printSchedule');if(!host)return;
+4464:   host.innerHTML=buildSchedulePrintSheet(buildSchedulePrintSvg(currentWeek));
+4465: }
+4466: async function printWeeklySchedule(){
+4467:   const button=$('printBtn');
+4468:   if(button?.disabled)return;
+4469:   if(button)button.disabled=true;
+4470:   try{
+4471:     if(document.fonts?.ready)await document.fonts.ready;
+4472:     renderPrintSchedule();
+4473:     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+4474:     window.print();
+4475:   }catch(error){
+4476:     toast('列印準備失敗',error.message||'請稍後再試','error');
+4477:   }finally{
+4478:     if(button)button.disabled=false;
+4479:   }
+4480: }
+4481: 
+4482: function scheduleTimeBounds(ds,filter='',sourceEvents=state.events){
+4483:   const es=sourceEvents.filter(e=>eventIsActive(e)&&ds.includes(e.date)&&(!filter||eventPeople(e).includes(filter)));
+4484:   if(!es.length)return {start:8*60,end:21*60};
+4485:   let min=Math.min(...es.map(e=>minutes(e.start))),max=Math.max(...es.map(e=>minutes(e.end)));
+5264: function setLineAutoNotifyEnabled(v){storageSet(LINE_AUTO_NOTIFY_KEY,v?'1':'0')}
+5265: async function titvBackendFetch(path,options={}){
+5266:   if(window.titvDesktop?.isDesktop&&typeof window.titvDesktop.fetchBackend==='function'&&String(path||'').startsWith('/.netlify/functions/')){
+5267:     const result=await window.titvDesktop.fetchBackend(path,options);
+5268:     return new Response(result.body??'',{status:Number(result.status)||500,headers:result.headers||{}});
+5269:   }
+5270:   return fetch(path,options);
+5271: }
+5272: function updateLineConnectionUI(data={}){
+5273:   const host=$('lineConnectionStatus'),badge=$('lineModeBadge');
+5274:   const configured=Boolean(data.configured),connected=Boolean(data.connected),checking=Boolean(data.checking);
+5275:   let title='LINE 尚未完成第一階段設定',detail='目前只需要 LINE_CHANNEL_ID 與新的 LINE_CHANNEL_SECRET；群組 ID 可以等 Webhook 成功後再取得。',cls='local',pill='warning',pillText='未完成';
+5276:   if(checking){title='正在檢查 LINE 連線';detail='正在確認 Channel、Bot 與工程部群組狀態…';cls='warning';pill='warning';pillText='檢查中'}
+5277:   else if(connected){title='LINE 群組連線正常';detail=data.groupName?`已連線群組：${data.groupName}`:'Messaging API 與工程部群組均可使用。';cls='online';pill='success';pillText='已連線'}
+5278:   else if(data.stage==='group_pending'&&data.botOk){title='LINE Bot 已連線，等待綁定工程部群組';detail='Webhook 可以使用。請把 Bot 加入工程部 LINE 群組，並在群組傳送「#班表連線」取得 Group ID。';cls='warning';pill='warning';pillText='待綁群組'}
+5279:   else if(configured&&data.botOk){title='LINE Bot 已連線，但群組尚未完成';detail=data.error||'請確認 LINE_GROUP_ID 是否正確，或重新傳送「#班表連線」。';cls='warning';pill='warning';pillText='待群組'}
+5280:   else if(configured){title='LINE Channel 已設定，但 Bot 驗證未完成';detail=data.error||'請檢查 Channel ID / Channel Secret。';cls='warning';pill='warning';pillText='需處理'}
+5281:   else if(data.error){detail=data.error}
+5282:   if(host)host.innerHTML=`<span class="status-dot ${cls}"></span><div><strong>${esc(title)}</strong><p>${esc(detail)}</p></div>`;
+5283:   if(badge){badge.className=`pill ${pill}`;badge.textContent=pillText}
+5284:   setTextSafe('lineWebhookState',data.secretConfigured?'已設定':'未設定');
+5285:   setTextSafe('lineTokenState',(data.channelIdConfigured&&data.secretConfigured&&data.tokenConfigured)?'驗證成功':((data.channelIdConfigured||data.secretConfigured)?'待驗證':'未設定'));
+5286:   setTextSafe('lineGroupState',data.groupConfigured?(data.groupName||'已設定'):'未設定');
+5287:   setTextSafe('lineBotName',data.botName||'—');
+5288: }
+6302: 
+6303: function bindUI(){
+6304:   document.addEventListener('click',ev=>{
+6305:     const viewBtn=ev.target.closest('[data-view]');
+6306:     if(viewBtn&&!viewBtn.disabled){ev.preventDefault();setView(viewBtn.dataset.view);const menu=$('accountMenu');if(menu)menu.classList.add('hidden');setMobileSidebar(false);return;}
+6307:     const dashboardAddBtn=ev.target.closest('[data-dashboard-add-work]');
+6308:     if(dashboardAddBtn&&!dashboardAddBtn.disabled){ev.preventDefault();if(!canEdit()){toast('目前是檢視權限','此帳號無法新增工作。','warning');return;}openEventModal();return;}
+6309:     const proxyBtn=ev.target.closest('[data-proxy-click]');
+6310:     if(proxyBtn&&!proxyBtn.disabled){ev.preventDefault();const target=$(proxyBtn.dataset.proxyClick);if(target)target.click();return;}
+6311:     const jumpBtn=ev.target.closest('[data-view-jump]');
+6312:     if(jumpBtn&&!jumpBtn.disabled){ev.preventDefault();setView(jumpBtn.dataset.viewJump);const selector=jumpBtn.dataset.scrollTarget;if(selector)setTimeout(()=>document.querySelector(selector)?.scrollIntoView({behavior:'smooth',block:'start'}),80);}
+6313:   });
+6314:   $('mobileMenuBtn').addEventListener('click',()=>setMobileSidebar(!$('sidebar').classList.contains('open')));
+6315:   $('sidebarCloseBtn').addEventListener('click',()=>setMobileSidebar(false));
+6316:   $('sidebarScrim').addEventListener('click',()=>setMobileSidebar(false));
+6317:   document.addEventListener('keydown',ev=>{if(ev.key==='Escape')setMobileSidebar(false)});
+6318:   window.addEventListener('resize',()=>setMobileSidebar($('sidebar').classList.contains('open')));
+6319:   setMobileSidebar(false);
+6320:   syncEditorViewport();window.visualViewport?.addEventListener('resize',syncEditorViewport);window.visualViewport?.addEventListener('scroll',syncEditorViewport);window.addEventListener('resize',syncEditorViewport);
+6321:   $('editSelectedBtn').addEventListener('click',()=>{if(canEdit()&&selectedScheduleEventId)openEventModal(selectedScheduleEventId)});
+6322:   $('deleteSelectedBtn').addEventListener('click',()=>deleteSelectedScheduleEventFromKeyboard());
+6323:   $('undoBtn')?.addEventListener('click',()=>executeHistory('undo'));
+6324:   $('redoBtn')?.addEventListener('click',()=>executeHistory('redo'));
+6325:   document.addEventListener('keydown',ev=>{if(isTextEditingTarget(ev.target))return;const mod=ev.ctrlKey||ev.metaKey;if(!mod)return;const key=ev.key.toLowerCase();if(key==='z'){ev.preventDefault();executeHistory(ev.shiftKey?'redo':'undo');}else if(key==='y'){ev.preventDefault();executeHistory('redo');}});
+6326:   $('accountButton').addEventListener('click',e=>{e.preventDefault();e.stopPropagation();const menu=$('accountMenu');menu.classList.toggle('hidden');$('accountButton').setAttribute('aria-expanded',String(!menu.classList.contains('hidden')))});
