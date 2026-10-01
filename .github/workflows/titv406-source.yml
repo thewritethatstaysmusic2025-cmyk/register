@@ -1,0 +1,35 @@
+name: TITV406 source snapshot
+on:
+  push:
+    branches: [titv-desktop-406-halfday]
+    paths: [.github/workflows/titv406-source.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download pinned existing web assets
+        run: |
+          mkdir -p source406/web/vendor
+          cp -r titv-desktop source406/desktop
+          python3 - <<'PY'
+          import urllib.request
+          from pathlib import Path
+          base='https://6ab3a0849a645030d62dee84--titv-engineering-scheduler.netlify.app'
+          files=['index.html','vendor/jszip.min.js','TITV_LOGO.png','favicon.ico','favicon-32x32.png','apple-touch-icon.png','android-chrome-192x192.png','site.webmanifest','netlify.toml','_headers','_redirects','netlify/functions/line-send.mts','netlify/functions/line-status.mts','netlify/functions/line-webhook.mts','netlify/functions/taiwan-holidays.mts']
+          for f in files:
+            try:
+              with urllib.request.urlopen(base+'/'+f,timeout=25) as r:data=r.read()
+              if f!='index.html' and data.lstrip().startswith(b'<!DOCTYPE'):raise Exception('HTML fallback')
+              p=Path('source406/web')/f;p.parent.mkdir(parents=True,exist_ok=True);p.write_bytes(data)
+              print(f,len(data))
+            except Exception as e:print('Unavailable',f,str(e))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TITV406-Source
+          path: source406/
+          retention-days: 3
