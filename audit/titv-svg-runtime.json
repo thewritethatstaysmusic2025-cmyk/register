@@ -1,0 +1,491 @@
+{
+  "scope": "Isolated read-only browser contexts. Production writes and websockets blocked; no account authentication bypass.",
+  "results": [
+    {
+      "label": "desktop-core",
+      "url": "https://6ab0bfee2d703b9a4ff788c0--titv-engineering-scheduler.netlify.app/",
+      "rawVersion": "V3.30.7",
+      "styleTagCount": 24,
+      "stylesheetLinks": [],
+      "sourceExcerpts": [
+        {
+          "line": 451,
+          "text": ".ui-icon-sprite{position:absolute!important;width:0!important;height:0!important}"
+        },
+        {
+          "line": 452,
+          "text": ".tribal-icon{width:20px;height:20px;display:inline-block;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;flex:0 0 auto}"
+        },
+        {
+          "line": 453,
+          "text": ".nav-icon .tribal-icon{width:19px;height:19px}"
+        },
+        {
+          "line": 454,
+          "text": ".mobile-nav .tribal-icon{width:19px;height:19px}"
+        },
+        {
+          "line": 455,
+          "text": ".icon-button .tribal-icon{width:18px;height:18px}"
+        },
+        {
+          "line": 456,
+          "text": ".button .tribal-icon{width:16px;height:16px}"
+        },
+        {
+          "line": 458,
+          "text": ".brand-tribal-mark .tribal-icon{width:24px;height:24px}"
+        },
+        {
+          "line": 1636,
+          "text": "  #appShell #quickAddBtn:not(.hidden) .tribal-icon{width:18px!important;height:18px!important}"
+        },
+        {
+          "line": 3741,
+          "text": "function setView(view){"
+        },
+        {
+          "line": 3780,
+          "text": "function renderAll(){"
+        },
+        {
+          "line": 3998,
+          "text": "function renderDashboard(){"
+        },
+        {
+          "line": 4111,
+          "text": "function renderSchedule(){"
+        }
+      ],
+      "initial": {
+        "version": "V3.30.7",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "svgCount": 50,
+        "uiIconCount": 48,
+        "visibleIcons": [],
+        "duplicates": [],
+        "sprite": [
+          {
+            "width": 0,
+            "height": 0,
+            "position": "absolute",
+            "overflow": "hidden",
+            "symbols": 23
+          }
+        ],
+        "brokenReferences": [],
+        "documentWidth": 1440
+      },
+      "initialNavigationVisible": false,
+      "localModeButtonAvailable": false,
+      "authBoundary": "No accessible dashboard navigation; no authentication bypass attempted.",
+      "authButtons": [
+        {
+          "id": "authBackLocal",
+          "label": ""
+        },
+        {
+          "id": "authTabLogin",
+          "label": "登入"
+        },
+        {
+          "id": "authTabRegister",
+          "label": "註冊"
+        },
+        {
+          "id": "loginSubmitBtn",
+          "label": "登入"
+        },
+        {
+          "id": "resendVerificationBtn",
+          "label": "重寄驗證信"
+        },
+        {
+          "id": "forgotPasswordBtn",
+          "label": "忘記密碼？"
+        },
+        {
+          "id": "viewerEntryBtn",
+          "label": "使用員工編號查看班表"
+        },
+        {
+          "id": "viewerSubmitBtn",
+          "label": "查看已發布班表"
+        },
+        {
+          "id": "viewerBackBtn",
+          "label": "返回帳號登入"
+        },
+        {
+          "id": "registerSubmitBtn",
+          "label": "建立帳號"
+        },
+        {
+          "id": "",
+          "label": "更新密碼"
+        }
+      ],
+      "iconCSS": [
+        {
+          "context": "",
+          "selector": ".ui-icon-sprite",
+          "css": "position: absolute !important; width: 0px !important; height: 0px !important;"
+        },
+        {
+          "context": "",
+          "selector": ".tribal-icon",
+          "css": "width: 20px; height: 20px; display: inline-block; fill: none; stroke: currentcolor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; flex: 0 0 auto;"
+        },
+        {
+          "context": "",
+          "selector": ".nav-icon .tribal-icon",
+          "css": "width: 19px; height: 19px;"
+        },
+        {
+          "context": "",
+          "selector": ".mobile-nav .tribal-icon",
+          "css": "width: 19px; height: 19px;"
+        },
+        {
+          "context": "",
+          "selector": ".icon-button .tribal-icon",
+          "css": "width: 18px; height: 18px;"
+        },
+        {
+          "context": "",
+          "selector": ".button .tribal-icon",
+          "css": "width: 16px; height: 16px;"
+        },
+        {
+          "context": "",
+          "selector": ".brand-tribal-mark .tribal-icon",
+          "css": "width: 24px; height: 24px;"
+        },
+        {
+          "context": " print",
+          "selector": "#printSchedule .print-timeline-export svg",
+          "css": "width: 100% !important; height: auto !important; display: block !important;"
+        },
+        {
+          "context": " print",
+          "selector": "#printSchedule .print-timeline-export svg",
+          "css": "display: block !important; width: 297mm !important; height: 210mm !important; max-width: none !important; max-height: none !important; object-fit: contain !important;"
+        },
+        {
+          "context": " print",
+          "selector": "#printSchedule .print-timeline-export svg",
+          "css": "display: block !important; width: 297mm !important; height: 210mm !important; max-width: none !important; max-height: none !important;"
+        },
+        {
+          "context": "",
+          "selector": ".history-button svg",
+          "css": "width: 15px; height: 15px;"
+        },
+        {
+          "context": " (max-width: 560px)",
+          "selector": "#appShell #quickAddBtn:not(.hidden) .tribal-icon",
+          "css": "width: 18px !important; height: 18px !important;"
+        },
+        {
+          "context": "",
+          "selector": "#appShell .side-nav button .nav-icon svg",
+          "css": "width: 18px !important; height: 18px !important;"
+        },
+        {
+          "context": "",
+          "selector": "#appShell .ops-action > svg",
+          "css": "width: 21px !important; height: 21px !important; flex: 0 0 auto !important;"
+        }
+      ],
+      "pageErrors": [],
+      "blockedWriteRequests": []
+    },
+    {
+      "label": "web-current",
+      "url": "https://titv-engineering-scheduler.netlify.app/",
+      "rawVersion": "V3.33.8",
+      "styleTagCount": 30,
+      "stylesheetLinks": [],
+      "sourceExcerpts": [
+        {
+          "line": 453,
+          "text": ".ui-icon-sprite{position:absolute!important;width:0!important;height:0!important}"
+        },
+        {
+          "line": 454,
+          "text": ".tribal-icon{width:20px;height:20px;display:inline-block;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;vector-effect:non-scaling-stroke;flex:0 0 auto}"
+        },
+        {
+          "line": 455,
+          "text": ".nav-icon .tribal-icon{width:19px;height:19px}"
+        },
+        {
+          "line": 456,
+          "text": ".mobile-nav .tribal-icon{width:19px;height:19px}"
+        },
+        {
+          "line": 457,
+          "text": ".icon-button .tribal-icon{width:18px;height:18px}"
+        },
+        {
+          "line": 458,
+          "text": ".button .tribal-icon{width:16px;height:16px}"
+        },
+        {
+          "line": 460,
+          "text": ".brand-tribal-mark .tribal-icon{width:24px;height:24px}"
+        },
+        {
+          "line": 1622,
+          "text": "  #appShell #quickAddBtn:not(.hidden) .tribal-icon{width:18px!important;height:18px!important}"
+        },
+        {
+          "line": 2528,
+          "text": ".tribal-icon{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block}.eyebrow{color:#8e6428!important;letter-spacing:.19em!important}.eyebrow.light{color:#f0d6a5!important}"
+        },
+        {
+          "line": 4033,
+          "text": "function setView(view){"
+        },
+        {
+          "line": 4072,
+          "text": "function renderAll(){"
+        },
+        {
+          "line": 4290,
+          "text": "function renderDashboard(){"
+        },
+        {
+          "line": 4582,
+          "text": "function renderSchedule(){"
+        }
+      ],
+      "initial": {
+        "version": "V3.33.8",
+        "viewport": {
+          "width": 1440,
+          "height": 1000
+        },
+        "svgCount": 50,
+        "uiIconCount": 48,
+        "visibleIcons": [
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.nav-icon",
+            "width": 18,
+            "height": 18,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "grid",
+            "href": "#i-dashboard"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.nav-icon",
+            "width": 18,
+            "height": 18,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "grid",
+            "href": "#i-schedule"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.nav-icon",
+            "width": 18,
+            "height": 18,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "grid",
+            "href": "#i-leave"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.nav-icon",
+            "width": 18,
+            "height": 18,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "grid",
+            "href": "#i-staff"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.nav-icon",
+            "width": 18,
+            "height": 18,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "grid",
+            "href": "#i-template"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.nav-icon",
+            "width": 18,
+            "height": 18,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "grid",
+            "href": "#i-audit"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.nav-icon",
+            "width": 18,
+            "height": 18,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "grid",
+            "href": "#i-audit"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.nav-icon",
+            "width": 18,
+            "height": 18,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "grid",
+            "href": "#i-settings"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "span.",
+            "width": 19,
+            "height": 19,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "block",
+            "href": "#i-chevron-down"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "button.ops-action.primary",
+            "width": 21,
+            "height": 21,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "flex",
+            "href": "#i-schedule"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "button.ops-action",
+            "width": 21,
+            "height": 21,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "flex",
+            "href": "#i-add"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "button.ops-action",
+            "width": 21,
+            "height": 21,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "flex",
+            "href": "#i-sync"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "button.ops-action",
+            "width": 21,
+            "height": 21,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "flex",
+            "href": "#i-staff"
+          },
+          {
+            "selector": "svg.tribal-icon",
+            "parent": "button.ops-action",
+            "width": 21,
+            "height": 21,
+            "position": "static",
+            "top": "auto",
+            "left": "auto",
+            "transform": "none",
+            "translate": "none",
+            "flexShrink": "0",
+            "parentDisplay": "flex",
+            "href": "#i-publish"
+          }
+        ],
+        "duplicates": [],
+        "sprite": [
+          {
+            "width": 0,
+            "height": 0,
+            "position": "absolute",
+            "overflow": "hidden",
+            "symbols": 23
+          }
+        ],
+        "brokenReferences": [],
+        "documentWidth": 1440
+      },
+      "initialNavigationVisible": true,
+      "error": "locator.click: Timeout 3000ms exceeded.\nCall log:\n  - waiting for locator('.side-nav button[data-view=\"dashboard\"]')\n    - locator resolved to <button type=\"button\" class=\"active\" data-view=\"dashboard\">…</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <section aria-label=\"排班系統登入\" class=\"auth-panel v39-auth-panel\">…</section> from <div id=\"authGate\" class=\"auth-gate\" aria-hidden=\"false\">…</div> subtree intercepts pointer events\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <section aria-label=\"排班系統登入\" class=\"auth-panel v39-auth-panel\">…</section> from <div id=\"authGate\" class=\"auth-gate\" aria-hidden=\"false\">…</div> subtree intercepts pointer events\n    - retrying click action\n      - waiting 100ms\n    5 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <section aria-label=\"排班系統登入\" class=\"auth-panel v39-auth-panel\">…</section> from <div id=\"authGate\" class=\"auth-gate\" aria-hidden=\"false\">…</div> subtree intercepts pointer events\n    - retrying click action\n      - waiting 500ms\n",
+      "pageErrors": [],
+      "blockedWriteRequests": []
+    }
+  ]
+}
