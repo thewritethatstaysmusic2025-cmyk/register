@@ -14,7 +14,7 @@ function fixture(html){
  currentWeek='2026-09-28';leaveWeek=currentWeek;currentView='leave';
  state={meta:{orgName:'測試工程部',systemName:'製播排班系統',logoDataUrl:DEFAULT_LOGO_DATA},employees:[{id:'QA1',name:'測試甲',roles:['CAM'],active:true,employeeNumber:'QA1',order:1},{id:'QA2',name:'測試乙',roles:['TD'],active:true,employeeNumber:'QA2',order:2}],events:[],leaves:[],templates:[],weeks:{[currentWeek]:{status:'draft',version:1,publishedAt:null}},audits:[]};
  bindUI();hideAuthGate();renderAll();setTextSafe('systemVersionText',SYSTEM_VERSION);window.__schedulerBootReady=true;document.getElementById('bootScreen')?.remove();
- window.__halfQA={open:openLeaveModal,read:readLeaveFormEntry,all:()=>JSON.parse(JSON.stringify(state.leaves)),load:l=>{state.leaves=l;renderAll();},map:mapLeaveRow,unmap:mapLeaveFromCloud,label:leaveDisplayLabel,conflicts:leaveConflictsWithEvent,usage:formatLeaveUsage,days:leaveFullDayCount,hours:leaveHours,half:leaveIsHalfDay,allows:leaveAllowsHalfDay,print:()=>buildSchedulePrintSvg(currentWeek),png:()=>buildScheduleImageExportSvg(currentWeek,{generatedAt:0}).svg,render:renderAll,normalize:normalizeBackupPayload};`;
+ window.__halfQA={open:openLeaveModal,read:readLeaveFormEntry,all:()=>JSON.parse(JSON.stringify(state.leaves)),load:l=>{state.leaves=l;renderAll();},map:mapLeaveRow,unmap:mapLeaveFromCloud,label:leaveDisplayLabel,conflicts:leaveConflictsWithEvent,usage:formatLeaveUsage,days:leaveFullDayCount,hours:leaveHours,half:leaveIsHalfDay,allows:leaveAllowsHalfDay,print:()=>buildSchedulePrintSvg(currentWeek).svg,png:()=>buildScheduleImageExportSvg(currentWeek,{generatedAt:0}).svg,render:renderAll};`;
  return html.slice(0,m.index)+m[0].replace(m[1],()=>code)+html.slice(m.index+m[0].length);
 }
 const pages={web:fixture(await fs.readFile('web-overlay/index.html','utf8')),desktop:fixture(await fs.readFile('app/index.html','utf8'))};
@@ -51,6 +51,7 @@ try{
    return {label:q.label(l),during:q.conflicts(l,{date:l.date,start:'10:00',end:'11:00'}),before:q.conflicts(l,{date:l.date,start:'08:00',end:'09:00'}),after:q.conflicts(l,{date:l.date,start:'13:00',end:'14:00'}),overlap:q.conflicts(l,{date:l.date,start:'12:30',end:'14:00'}),days:q.days([l]),hours:q.hours([l]),usage:q.usage([l]),print:q.print(),png:q.png()};
   },saved);
   assert(matrix.during&&matrix.overlap);assert.equal(matrix.before,false);assert.equal(matrix.after,false);assert.equal(matrix.days,0.5);assert.equal(matrix.hours,0);assert.match(matrix.usage,/0.5/);assert.match(matrix.print,/半天/);assert.match(matrix.png,/半天/);assert.match(matrix.print,/09:00/);assert.match(matrix.png,/13:00/);
+  await fs.writeFile('qa/halfday-'+target+'-print.svg',matrix.print);await fs.writeFile('qa/halfday-'+target+'-image.svg',matrix.png);
   entry.boundaryChecksPassed=true;entry.halfDayUsage=matrix.usage;entry.printAndPngLabels=true;
   for(const type of ['休O','休F','輪休','國定假日H','員旅','公假']){
    await page.evaluate(()=>window.__halfQA.open(null,{date:'2026-09-29',employeeId:'QA2'}));await page.selectOption('#leaveType',type);await page.selectOption('#leaveUnit','half_day');assert(await page.locator('#leaveTimeSection').isVisible());
