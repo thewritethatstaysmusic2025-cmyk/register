@@ -71,7 +71,7 @@ function configureUpdates(){
 app.whenReady().then(()=>{
   createWindow();configureUpdates();
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    {label:'系統',submenu:[{label:'關於 TITV 排班系統',click:()=>message({type:'info',message:NAME,detail:`電腦版 ${app.getVersion()}\n核心 V3.33.8 · UI 修正版\n此版未使用 Windows 發行者憑證簽署。`})},{label:'檢查軟體更新',accelerator:'CmdOrCtrl+Alt+U',click:()=>checkUpdates(true)},{label:'安裝已下載更新',click:()=>readyVersion?promptInstall():message({type:'info',message:'尚無已下載的更新，請先檢查更新。'})},{type:'separator'},{role:'quit',label:'結束程式'}]},
+    {label:'系統',submenu:[{label:'關於 TITV 排班系統',click:()=>message({type:'info',message:NAME,detail:`電腦版 ${app.getVersion()}\n核心 V3.33.10 · 台內半天休假\n此版未使用 Windows 發行者憑證簽署。`})},{label:'檢查軟體更新',accelerator:'CmdOrCtrl+Alt+U',click:()=>checkUpdates(true)},{label:'安裝已下載更新',click:()=>readyVersion?promptInstall():message({type:'info',message:'尚無已下載的更新，請先檢查更新。'})},{type:'separator'},{role:'quit',label:'結束程式'}]},
     {label:'編輯',submenu:[{role:'undo',label:'復原'},{role:'redo',label:'重做'},{type:'separator'},{role:'cut',label:'剪下'},{role:'copy',label:'複製'},{role:'paste',label:'貼上'},{role:'selectAll',label:'全選'}]},
     {label:'檢視',submenu:[{role:'resetZoom',label:'實際大小'},{role:'zoomIn',label:'放大'},{role:'zoomOut',label:'縮小'},{role:'togglefullscreen',label:'全螢幕'}]}
   ]));

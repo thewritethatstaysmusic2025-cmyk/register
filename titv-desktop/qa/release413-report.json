@@ -1,0 +1,111 @@
+{
+  "version": "4.0.13",
+  "core": "V3.33.10",
+  "signed": false,
+  "installerBytes": 89531375,
+  "sha256": "81c8b8bf7925dc983fd11d8887fec9a05dd765b8022c5ce44b4ee84f178135a0",
+  "uiTests": {
+    "scope": "Isolated fixture data; production writes and notifications blocked. Existing cloud JSONB contract tested by serialization and rehydration, not a real employee update.",
+    "webCore": "V3.33.10",
+    "desktop": "4.0.13",
+    "sharedModuleHash": "5a340dc2799189f58b8ef10c42524f93cd7317c7ac3f1b02ae8be5d5d7323397",
+    "cases": [
+      {
+        "client": "web",
+        "createAM": true,
+        "editPM": true,
+        "metadataRoundtrip": true,
+        "halfDayCount": 0.5,
+        "conflicts": [
+          false,
+          true,
+          false
+        ],
+        "fullDayConversion": true,
+        "preservedInternalCode": true,
+        "invalidTimeRejected": true,
+        "pngLabel": true,
+        "printLabel": true,
+        "excelLabel": true,
+        "delete": true,
+        "stableIcons": 48,
+        "pageErrors": []
+      },
+      {
+        "client": "desktop",
+        "createAM": true,
+        "editPM": true,
+        "metadataRoundtrip": true,
+        "halfDayCount": 0.5,
+        "conflicts": [
+          false,
+          true,
+          false
+        ],
+        "fullDayConversion": true,
+        "preservedInternalCode": true,
+        "invalidTimeRejected": true,
+        "pngLabel": true,
+        "printLabel": true,
+        "excelLabel": true,
+        "delete": true,
+        "stableIcons": 48,
+        "pageErrors": []
+      }
+    ],
+    "passed": true
+  },
+  "windowsSmoke": {
+    "passed": true,
+    "native": {
+      "version": "4.0.13",
+      "packaged": true,
+      "security": true,
+      "menu": [
+        "關於 TITV 排班系統",
+        "檢查軟體更新",
+        "安裝已下載更新",
+        "",
+        "結束程式",
+        "復原",
+        "重做",
+        "",
+        "剪下",
+        "複製",
+        "貼上",
+        "全選",
+        "實際大小",
+        "放大",
+        "縮小",
+        "全螢幕"
+      ]
+    },
+    "renderer": {
+      "version": "4.0.13",
+      "core": "V3.33.10",
+      "slots": 48,
+      "nodeRequire": "undefined",
+      "untrustedEndpointRejected": true,
+      "hasQA": false
+    },
+    "errors": [],
+    "scope": "Windows CI packaged application launch. No live login or production writes."
+  },
+  "webProductionDeployed": false,
+  "webDeploymentBlocker": "The authorized Netlify deployment proxy supports full source builds, not partial-file deployments. The current complete source bundle with existing backend functions is needed. The production site remains untouched.",
+  "verifiedManifest": {
+    "desktopVersion": "4.0.13",
+    "coreVersion": "V3.33.10",
+    "feature": "台內半天休假",
+    "webSha256": "32c8ac8782c3172a14eefd00f105189fcc7db74fabc12e2f9bf6884fd80980f5",
+    "desktopSha256": "43d95996f15197f9beb12e3cd7458ec4058b628480ae1a966605ff62048b962e",
+    "sharedBusinessLogic": true,
+    "webProductionDeployed": false,
+    "schemaMigrationRequired": false,
+    "metadataContract": {
+      "unit": "hour",
+      "duration": "half_day",
+      "day_fraction": 0.5
+    }
+  }
+}

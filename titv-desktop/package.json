@@ -1,26 +1,70 @@
 {
   "name": "titv-engineering-scheduler-desktop",
-  "version": "4.0.5",
+  "version": "4.0.13",
   "private": true,
   "description": "TITV 工程部製播排班系統 Windows Desktop",
   "main": "runtime/main.cjs",
-  "repository": {"type":"git","url":"https://github.com/thewritethatstaysmusic2025-cmyk/register.git"},
-  "scripts": {
-    "start":"electron .",
-    "prepare:ui":"node prepare405.mjs",
-    "test:ui":"node test405.mjs",
-    "dist":"electron-builder --win nsis --x64 --publish never"
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thewritethatstaysmusic2025-cmyk/register.git"
   },
-  "dependencies":{"electron-updater":"6.8.9"},
-  "devDependencies":{"electron":"38.2.0","electron-builder":"26.0.12","acorn":"8.15.0","playwright":"1.56.1"},
+  "scripts": {
+    "start": "electron .",
+    "prepare:ui": "node prepare405.mjs",
+    "test:ui": "node test405.mjs",
+    "dist": "electron-builder --win nsis --x64 --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.9"
+  },
+  "devDependencies": {
+    "electron": "38.2.0",
+    "electron-builder": "26.0.12",
+    "acorn": "8.15.0",
+    "playwright": "1.56.1"
+  },
   "build": {
-    "appId":"tw.org.titv.engineering.scheduler",
-    "productName":"TITV 工程部製播排班系統",
-    "asar":true,
-    "directories":{"output":"dist","buildResources":"build"},
-    "files":["app/**/*","runtime/**/*","preload.cjs","package.json"],
-    "publish":[{"provider":"github","owner":"thewritethatstaysmusic2025-cmyk","repo":"register","channel":"latest","publishAutoUpdate":true}],
-    "win":{"icon":"build/icon.png","target":[{"target":"nsis","arch":["x64"]}]},
-    "nsis":{"oneClick":false,"allowToChangeInstallationDirectory":true,"createDesktopShortcut":true,"createStartMenuShortcut":true,"shortcutName":"TITV 工程部製播排班系統","artifactName":"TITV_Engineering_Scheduler_Setup_${version}_${arch}.${ext}","deleteAppDataOnUninstall":false}
+    "appId": "tw.org.titv.engineering.scheduler",
+    "productName": "TITV 工程部製播排班系統",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "app/**/*",
+      "runtime/**/*",
+      "preload.cjs",
+      "package.json"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "thewritethatstaysmusic2025-cmyk",
+        "repo": "register",
+        "channel": "latest",
+        "publishAutoUpdate": true
+      }
+    ],
+    "win": {
+      "icon": "build/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TITV 工程部製播排班系統",
+      "artifactName": "TITV_Engineering_Scheduler_Setup_${version}_${arch}.${ext}",
+      "deleteAppDataOnUninstall": false
+    }
   }
 }
