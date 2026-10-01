@@ -1,0 +1,102 @@
+name: TITV SVG runtime audit
+on:
+  push:
+    branches: [titv-svg-layout-audit]
+    paths: [.github/workflows/titv-svg-runtime-audit.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated browser test tools
+        run: |
+          mkdir -p /tmp/titv-svg-test
+          cd /tmp/titv-svg-test
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund --save-exact playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Verify actual DOM and computed icon styles
+        shell: bash
+        run: |
+          cat > /tmp/titv-svg-test/audit.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import fs from 'node:fs/promises';
+          const browser=await chromium.launch({headless:true});
+          const results=[];
+          const sources=[['desktop-core','https://6ab0bfee2d703b9a4ff788c0--titv-engineering-scheduler.netlify.app/'],['web-current','https://titv-engineering-scheduler.netlify.app/']];
+          const snapshot=()=>{
+            const selector=el=>el ? (el.id?'#'+el.id:el.tagName.toLowerCase()+'.'+[...el.classList].join('.')) : '';
+            const visible=el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return el.getClientRects().length>0&&r.width>0&&r.height>0&&s.visibility!=='hidden'&&s.display!=='none'};
+            const icons=[...document.querySelectorAll('svg.tribal-icon')];
+            const rows=icons.filter(visible).map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el),p=el.parentElement;return {selector:selector(el),parent:selector(p),width:+r.width.toFixed(2),height:+r.height.toFixed(2),position:s.position,top:s.top,left:s.left,transform:s.transform,translate:s.translate,flexShrink:s.flexShrink,parentDisplay:getComputedStyle(p).display,href:el.querySelector('use')?.getAttribute('href')||''}});
+            const duplicates=[...document.querySelectorAll('.nav-icon,.icon-button,.history-button,.ops-action')].map(p=>({parent:selector(p),count:p.querySelectorAll(':scope > svg.tribal-icon').length})).filter(p=>p.count>1);
+            const sprite=[...document.querySelectorAll('svg.ui-icon-sprite')].map(el=>{const r=el.getBoundingClientRect(),s=getComputedStyle(el);return {width:r.width,height:r.height,position:s.position,overflow:s.overflow,symbols:el.querySelectorAll('symbol').length}});
+            const brokenReferences=icons.flatMap(el=>{const href=el.querySelector('use')?.getAttribute('href');return href?.startsWith('#')&&!document.getElementById(href.slice(1))?[href]:[]});
+            return {version:document.getElementById('systemVersionText')?.textContent,viewport:{width:innerWidth,height:innerHeight},svgCount:document.querySelectorAll('svg').length,uiIconCount:icons.length,visibleIcons:rows,duplicates,sprite,brokenReferences,documentWidth:document.documentElement.scrollWidth};
+          };
+          for(const [label,url] of sources){
+            const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block'});
+            const blocked=[];
+            await context.route('**/*',async route=>{const r=route.request();if(!['GET','HEAD','OPTIONS'].includes(r.method())||/\/line-(send|webhook)(?:\?|$)/.test(r.url())){blocked.push({method:r.method(),path:new URL(r.url()).pathname});return route.abort('blockedbyclient')}return route.continue()});
+            await context.routeWebSocket('**/*',ws=>ws.close());
+            const page=await context.newPage();page.setDefaultTimeout(3000);
+            const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.dismiss());
+            const entry={label,url};
+            try{
+              const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:45000});
+              const raw=await response.text();
+              entry.rawVersion=raw.match(/const SYSTEM_VERSION\s*=\s*['"]([^'"]+)/)?.[1]||null;
+              entry.styleTagCount=(raw.match(/<style\b/gi)||[]).length;
+              entry.stylesheetLinks=await page.locator('link[rel="stylesheet"]').evaluateAll(xs=>xs.map(x=>x.getAttribute('href')));
+              entry.sourceExcerpts=raw.split('\n').flatMap((s,i)=>/\.tribal-icon\s*\{|\.ui-icon-sprite|function (?:setView|renderAll|renderDashboard|renderSchedule)\b/.test(s)?[{line:i+1,text:s.slice(0,1100)}]:[]).slice(0,25);
+              await page.waitForTimeout(1800);
+              entry.initial=await page.evaluate(snapshot);
+              const nav=page.locator('.side-nav button[data-view="dashboard"]');
+              entry.initialNavigationVisible=await nav.isVisible();
+              if(!entry.initialNavigationVisible){
+                const localButton=page.getByRole('button',{name:/本機.*(試用|模式|使用)|離線.*(試用|模式)|進入本機/}).first();
+                entry.localModeButtonAvailable=await localButton.isVisible();
+                if(entry.localModeButtonAvailable){entry.localModeButtonLabel=await localButton.innerText();await localButton.click();await page.waitForTimeout(800)}
+              }
+              if(await nav.isVisible()){
+                await nav.click();entry.beforeCycles=await page.evaluate(snapshot);let completed=0;
+                const views=['schedule','leave','staff','templates','compliance','audit','settings'];
+                for(let i=0;i<28;i++){
+                  const next=page.locator('.side-nav button[data-view="'+views[i%views.length]+'"]');
+                  if(await next.isVisible()){await next.click();await nav.click();completed++}
+                }
+                entry.cycles=completed;entry.afterCycles=await page.evaluate(snapshot);
+                await page.setViewportSize({width:390,height:844});await page.waitForTimeout(300);entry.mobile=await page.evaluate(snapshot);
+                const menu=page.locator('#mobileMenuBtn');
+                if(await menu.isVisible()){await menu.click();await page.waitForTimeout(300);entry.mobileMenu=await page.evaluate(()=>{const el=document.getElementById('sidebar'),r=el.getBoundingClientRect(),s=getComputedStyle(el);return {className:el.className,left:r.left,right:r.right,width:r.width,transform:s.transform,position:s.position}})}
+              }else{entry.authBoundary='No accessible dashboard navigation; no authentication bypass attempted.';entry.authButtons=await page.locator('#authGate button').evaluateAll(xs=>xs.map(x=>({id:x.id,label:x.textContent.trim().slice(0,80)})))}
+              entry.iconCSS=await page.evaluate(()=>{const output=[];function walk(rules,context=''){for(const r of rules){if(r.selectorText&&/tribal-icon|ui-icon-sprite|\bsvg\b/.test(r.selectorText))output.push({context,selector:r.selectorText,css:r.style.cssText});else if(r.cssRules)walk(r.cssRules,context+' '+(r.conditionText||''))}}for(const sheet of document.styleSheets){try{walk(sheet.cssRules)}catch{}}return output});
+            }catch(e){entry.error=e.message}
+            entry.pageErrors=errors;entry.blockedWriteRequests=blocked;results.push(entry);await context.close();
+          }
+          await browser.close();
+          await fs.mkdir('audit',{recursive:true});
+          await fs.writeFile('audit/titv-svg-runtime.json',JSON.stringify({scope:'Isolated read-only browser contexts. Production writes and websockets blocked; no account authentication bypass.',results},null,2));
+          console.log('===RUNTIME AUDIT===');console.log(JSON.stringify(results,null,2));
+          JS
+          node /tmp/titv-svg-test/audit.mjs
+      - name: Retain sanitized test report on audit branch only
+        shell: bash
+        run: |
+          git config user.name 'TITV UI audit'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add audit/titv-svg-runtime.json
+          git diff --cached --quiet || git commit -m '[skip ci] Record measured SVG audit results (no production changes)'
+          git push origin HEAD:titv-svg-layout-audit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TITV-SVG-Runtime-Audit
+          path: audit/titv-svg-runtime.json
+          retention-days: 7
