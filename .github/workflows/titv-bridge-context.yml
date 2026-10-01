@@ -1,0 +1,33 @@
+name: TITV bridge contract inspection
+on:
+  push:
+    branches: [titv-desktop-405-ui-repair]
+    paths: [.github/workflows/titv-bridge-context.yml]
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 - <<'PY'
+          import urllib.request,re
+          from pathlib import Path
+          raw=urllib.request.urlopen('https://6ab3a0849a645030d62dee84--titv-engineering-scheduler.netlify.app/',timeout=30).read().decode('utf-8-sig')
+          lines=raw.splitlines(); picked=set()
+          targets=['function titvBackendFetch(', 'function canEdit(', 'function canAdmin(', 'function renderPrintSchedule(', 'function bindUI(', 'state=load', 'function setMobileSidebar(', 'function isCloudConfigured(', 'function cloudActive(']
+          for i,s in enumerate(lines):
+            if any(t in s for t in targets): picked.update(range(max(0,i-1),min(len(lines),i+24)))
+          out=[]
+          for i in sorted(picked):
+            s=re.sub(r'eyJ[A-Za-z0-9_\-.]{60,}', '[REDACTED]',lines[i]);s=re.sub(r'[A-Za-z0-9+/=_-]{160,}','[LONG-LITERAL]',s)
+            out.append(f'{i+1}: {s[:5000]}')
+          Path('audit').mkdir(exist_ok=True);Path('audit/bridge-context.txt').write_text('\n'.join(out))
+          PY
+          git config user.name 'TITV UI repair'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add audit/bridge-context.txt
+          git commit -m '[skip ci] Record bridge integration contract'
+          git push origin HEAD:titv-desktop-405-ui-repair
