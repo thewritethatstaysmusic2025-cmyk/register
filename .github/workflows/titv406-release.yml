@@ -36,6 +36,8 @@ jobs:
       - name: Add half-day leave to both clients
         shell: pwsh
         run: |
+          node adjust406.mjs
+          if ($LASTEXITCODE -ne 0) { throw 'Source preparation failed' }
           node halfday406.mjs
           if ($LASTEXITCODE -ne 0) { throw 'Half-day patch failed' }
       - name: Install verification browser
