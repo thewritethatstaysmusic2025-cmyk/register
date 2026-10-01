@@ -1,0 +1,71 @@
+name: TITV half-day delivery
+on:
+  push:
+    branches: [titv-halfday-406]
+    paths: [.github/workflows/titv-406-delivery.yml]
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: titv-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare version
+        run: |
+          npm version 4.0.6 --no-git-tag-version
+          npm pkg set 'scripts.prepare:ui=node prepare406.mjs'
+      - run: npm install --no-audit --no-fund
+      - run: node prepare406.mjs
+      - run: npx playwright install chromium
+      - run: node test405.mjs
+      - run: node test406.mjs
+      - name: Preserve existing icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $src=[Drawing.Image]::FromFile((Resolve-Path 'app/android-chrome-192x192.png'))
+          $bmp=New-Object Drawing.Bitmap 512,512
+          $g=[Drawing.Graphics]::FromImage($bmp)
+          $g.Clear([Drawing.Color]::Transparent)
+          $g.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $g.DrawImage($src,0,0,512,512)
+          $bmp.Save((Join-Path (Get-Location) 'build/icon.png'),[Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose();$bmp.Dispose();$src.Dispose()
+      - run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Check packaged Windows application
+        run: |
+          node -e "const fs=require('fs');fs.writeFileSync('smoke406.mjs',fs.readFileSync('smoke405.mjs','utf8').replaceAll('4.0.5','4.0.6').replaceAll('V3.33.8','V3.33.9'));"
+          node smoke406.mjs
+      - name: Package shared frontend and hashes
+        shell: pwsh
+        run: |
+          Compress-Archive -Path 'web-overlay/*' -DestinationPath 'dist/TITV_Web_V3.33.9_HalfDay_Overlay.zip'
+          Get-FileHash 'dist/*exe' -Algorithm SHA256 | Format-List | Out-File 'dist/SHA256SUMS.txt'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TITV-4.0.6-HalfDay-Verified
+          path: |
+            titv-desktop/dist/*.exe
+            titv-desktop/dist/*.blockmap
+            titv-desktop/dist/latest.yml
+            titv-desktop/dist/SHA256SUMS.txt
+            titv-desktop/dist/TITV_Web_V3.33.9_HalfDay_Overlay.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: TITV-406-QA-Final
+          path: |
+            titv-desktop/qa/*.json
+            titv-desktop/qa/*.svg
+            titv-desktop/qa/screenshots/*.png
+          if-no-files-found: warn
