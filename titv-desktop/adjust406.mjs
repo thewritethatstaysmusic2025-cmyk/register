@@ -1,0 +1,10 @@
+import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const file='halfday406.mjs';let s=await fs.readFile(file,'utf8');
+const marker="code=replaceFunction(code,'saveLeave',fn=>fn.replace('${l.date} ${l.type}','${l.date} ${leaveDisplayLabel(l)}'));";
+assert(s.includes(marker));
+s=s.replace(marker,()=>`code=replaceFunction(code,'renderLeave',fn=>fn.replace("[meta.detail,leaveHasTimeRange(l)?", "[leaveIsHalfDay(l)&&canonicalLeaveType(l.type)!=='半天'?'半天':'',meta.detail,leaveHasTimeRange(l)?"));
+code=replaceFunction(code,'buildScheduleImageExportSvg',fn=>once(fn,'\u0024{exportEmployeeName(l.employeeId)} · \u0024{type}','\u0024{exportEmployeeName(l.employeeId)} · \u0024{type}\u0024{leaveIsHalfDay(l)&&type!==\'半天\'?\' 半天\':\'\'}'));
+`+marker);
+await fs.writeFile(file,s);
+const test='test406.mjs';let t=await fs.readFile(test,'utf8');assert(t.includes('print:()=>buildSchedulePrintSvg(currentWeek),'));t=t.replace('print:()=>buildSchedulePrintSvg(currentWeek),','print:()=>buildSchedulePrintSvg(currentWeek).svg,');await fs.writeFile(test,t);
