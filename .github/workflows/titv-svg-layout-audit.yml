@@ -1,0 +1,75 @@
+name: TITV read-only SVG source audit
+on:
+  push:
+    branches: [titv-svg-layout-audit]
+    paths: [.github/workflows/titv-svg-layout-audit.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Inspect public renderer sources without modifying production
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import urllib.request, urllib.parse, re, json, hashlib
+          from html.parser import HTMLParser
+          from pathlib import Path
+          class Tags(HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.scripts=[]; self.links=[]; self.tags={}; self.styles=0
+              def handle_starttag(self, tag, attrs):
+                  a=dict(attrs); self.tags[tag]=self.tags.get(tag,0)+1
+                  if tag=='script' and a.get('src'): self.scripts.append(a['src'])
+                  if tag=='link': self.links.append(a)
+                  if tag=='style': self.styles+=1
+          def get(url):
+              req=urllib.request.Request(url,headers={'User-Agent':'TITV-ReadOnly-Source-Audit/1.0'})
+              with urllib.request.urlopen(req,timeout=35) as r:
+                  return r.read().decode('utf-8-sig'),dict(r.headers),r.geturl()
+          def redact(s):
+              s=re.sub(r'data:[^\s\"\']+', '[DATA-URI]',s)
+              s=re.sub(r'eyJ[A-Za-z0-9_\-.]{60,}', '[REDACTED-JWT]',s)
+              s=re.sub(r'(?i)((?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*[\"\'])[^\"\']+',r'\1[REDACTED]',s)
+              s=re.sub(r'[A-Za-z0-9+/=_-]{160,}','[LONG-LITERAL]',s)
+              return s
+          report=[]
+          for label,url in [('desktop-core','https://6ab0bfee2d703b9a4ff788c0--titv-engineering-scheduler.netlify.app/'),('web-current','https://titv-engineering-scheduler.netlify.app/')]:
+              try:
+                  html,headers,final=get(url)
+                  parser=Tags(); parser.feed(html)
+                  lines=html.splitlines()
+                  entry={'label':label,'url':url,'finalUrl':final,'sha256':hashlib.sha256(html.encode()).hexdigest(),'bytes':len(html.encode()),'lines':len(lines),'scripts':parser.scripts,'stylesheetLinks':[x for x in parser.links if x.get('rel')=='stylesheet'],'inlineStyleCount':parser.styles,'sourceTagCounts':parser.tags}
+                  entry['versionExcerpts']=[{'line':i+1,'text':redact(line)[:450]} for i,line in enumerate(lines) if re.search(r'APP_VERSION|SYSTEM_VERSION|V3\.30\.7|VERSION\s*=',line)][:12]
+                  entry['svgCSS']=[]
+                  for m in re.finditer(r'<style\b[^>]*>([\s\S]*?)</style>',html,re.I):
+                      css=m.group(1)
+                      for rule in re.finditer(r'([^{}]+)\{([^{}]*)\}',css):
+                          if re.search(r'\bsvg\b|\.icon\b|icon-wrapper',rule.group(1),re.I):
+                              entry['svgCSS'].append({'line':html[:m.start(1)+rule.start()].count('\n')+1,'selector':redact(rule.group(1).strip())[:450],'declarations':redact(rule.group(2).strip())[:1100]})
+                  entry['renderExcerpts']=[]
+                  pattern=r'appendChild\(|createElementNS\(|insertAdjacentHTML\(|MutationObserver|createIcons\(|replaceChildren\(|addEventListener\([\"\'](?:mouseover|mouseenter)'
+                  for i,line in enumerate(lines):
+                      if re.search(pattern,line):
+                          entry['renderExcerpts'].append({'line':i+1,'text':'\n'.join(f'{j+1}: {redact(lines[j])[:850]}' for j in range(max(0,i-2),min(len(lines),i+3)))})
+                  entry['renderExcerpts']=entry['renderExcerpts'][:65]
+                  entry['svgMarkupExcerpts']=[{'line':i+1,'text':redact(line)[:850]} for i,line in enumerate(lines) if '<svg' in line.lower()][:30]
+                  entry['layoutExcerpts']=[{'line':i+1,'text':redact(line)[:650]} for i,line in enumerate(lines) if re.search(r'nav-btn|sidebar|week-grid|schedule-grid|function render|function setView|data-view|data-tab|class=\"tab',line)][:50]
+                  report.append(entry)
+              except Exception as e:
+                  report.append({'label':label,'url':url,'error':str(e)})
+          Path('source-audit.json').write_text(json.dumps(report,ensure_ascii=False,indent=2))
+          print('=== TITV SOURCE AUDIT BEGIN ===')
+          print(json.dumps(report,ensure_ascii=False,indent=2))
+          print('=== TITV SOURCE AUDIT END ===')
+          PY
+      - name: Store audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-SVG-Source-Audit
+          path: source-audit.json
+          retention-days: 7
+          if-no-files-found: error
