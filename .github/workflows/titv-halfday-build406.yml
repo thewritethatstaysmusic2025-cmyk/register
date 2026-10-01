@@ -1,0 +1,87 @@
+name: TITV 4.0.6 half-day verified build
+on:
+  push:
+    branches: [titv-halfday-406]
+    paths: [.github/workflows/titv-halfday-build406.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: titv-406-build
+  cancel-in-progress: false
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: titv-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Set package version and correct unused test hook
+        shell: pwsh
+        run: |
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='4.0.6';p.scripts['prepare:ui']='node prepare406.mjs';p.scripts['test:halfday']='node test406.mjs';fs.writeFileSync('package.json',JSON.stringify(p,null,2));let t=fs.readFileSync('test406.mjs','utf8');t=t.replace(',normalize:normalizeBackupPayload','');fs.writeFileSync('test406.mjs',t);let s=fs.readFileSync('smoke405.mjs','utf8').replaceAll('4.0.5','4.0.6').replaceAll('V3.33.8','V3.33.9');fs.writeFileSync('smoke406.mjs',s);"
+      - name: Install pinned build tools
+        run: npm install --no-audit --no-fund
+      - name: Build shared web and desktop frontend
+        run: npm run prepare:ui
+      - name: Install regression browser
+        run: npx playwright install chromium
+      - name: Verify existing icon and layout repair
+        run: npm run test:ui
+      - name: Verify half-day form and data flow
+        run: npm run test:halfday
+      - name: Preserve TITV icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $src=[Drawing.Image]::FromFile((Resolve-Path 'app/android-chrome-192x192.png'))
+          $bmp=New-Object Drawing.Bitmap 512,512
+          $g=[Drawing.Graphics]::FromImage($bmp)
+          $g.Clear([Drawing.Color]::Transparent)
+          $g.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $g.DrawImage($src,0,0,512,512)
+          $bmp.Save((Join-Path (Get-Location) 'build/icon.png'),[Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose();$bmp.Dispose();$src.Dispose()
+      - name: Build Windows installer
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Launch packaged Windows app
+        run: node smoke406.mjs
+      - name: Assemble verified delivery
+        shell: pwsh
+        run: |
+          $exe='dist/TITV_Engineering_Scheduler_Setup_4.0.6_x64.exe'
+          if(!(Test-Path $exe) -or !(Test-Path "$exe.blockmap")){throw 'Installer missing'}
+          if((Get-Content 'dist/latest.yml' -Raw) -notmatch 'version: 4.0.6'){throw 'Invalid update metadata'}
+          $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  TITV_Engineering_Scheduler_Setup_4.0.6_x64.exe"|Set-Content 'dist/SHA256SUMS.txt'
+          $report=@{version='4.0.6';core='V3.33.9';sha256=$hash;installerBytes=(Get-Item $exe).Length;signed=$false;webProductionDeployed=$false;ui=(Get-Content 'qa/test-report.json' -Raw|ConvertFrom-Json);halfday=(Get-Content 'qa/halfday-tests.json' -Raw|ConvertFrom-Json);windows=(Get-Content 'qa/windows-smoke.json' -Raw|ConvertFrom-Json);manifest=(Get-Content 'qa/halfday-manifest.json' -Raw|ConvertFrom-Json)}
+          $report|ConvertTo-Json -Depth 20|Set-Content 'dist/TEST_REPORT.json' -Encoding utf8
+          Compress-Archive -Path 'web-overlay/*' -DestinationPath 'dist/TITV_Web_V3.33.9_HalfDay_Overlay.zip'
+      - name: Upload tested installer and shared frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-4.0.6-HalfDay-Verified
+          path: |
+            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.6_x64.exe
+            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.6_x64.exe.blockmap
+            titv-desktop/dist/latest.yml
+            titv-desktop/dist/SHA256SUMS.txt
+            titv-desktop/dist/TEST_REPORT.json
+            titv-desktop/dist/TITV_Web_V3.33.9_HalfDay_Overlay.zip
+          if-no-files-found: error
+      - name: Save diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-406-QA
+          path: |
+            titv-desktop/qa/*.json
+            titv-desktop/qa/screenshots/*.png
+          if-no-files-found: warn
