@@ -1,0 +1,592 @@
+Source: https://6ab3a0849a645030d62dee84--titv-engineering-scheduler.netlify.app/
+SHA256: 99967353a3cf9a1729c99e6078f0bd9f54a5718edf66b7bc4488387bfccca3f1
+3158: <script>
+3189: <script src="./vendor/jszip.min.js"></script>
+3190: <script type="module">
+3209: function storageRemove(key){try{localStorage.removeItem(key);return true}catch(_e){return false}}
+3210: 
+3211: let state=null;
+3212: let currentView=storageGet(VIEW_KEY,'dashboard')||'dashboard';
+3213: let currentWeek=mondayISO(localDateISO());
+3214: let leaveWeek=currentWeek;
+3215: let cloudCfg=loadCloudCfg();
+3216: let supabase=null;
+3217: let supabaseModule=null;
+3218: let cloudUser=null;
+3219: let memberships=[];
+3220: let currentMembership=null;
+3221: let currentOrg=null;
+3222: let viewerMode=false;
+3223: let viewerEmployee=null;
+3224: let viewerEmployeeNumber="";
+3225: let viewerScheduleScope='mine';
+3226: let scheduleClipboard=null;
+3227: let selectedScheduleEventId="";
+3228: let selectedScheduleTarget={date:"",time:""};
+3229: let realtimeChannel=null;
+3230: let realtimeTimer=null;
+3231: let realtimePollTimer=null;
+3232: let realtimeRetryTimer=null;
+3233: let realtimeStatus='idle';
+3234: let realtimeRetryCount=0;
+3235: let authSubscription=null;
+3236: let cloudBypass=false;
+3237: let loadingCloud=false;
+3238: let cloudStateRevision=0;
+3239: let pendingCloudReload=false;
+3240: let recoveryMode=false;
+3241: let authTransitionPromise=null;
+3242: let publishInFlight=false;
+3243: let draftSaveInFlight=false;
+3244: let copyWeekInFlight=false;
+3245: let historyUndoStack=[];
+3246: let historyRedoStack=[];
+3247: let historyInFlight=false;
+3248: let historyApplying=false;
+3249: const HISTORY_LIMIT=50;
+3250: 
+3251: 
+3252: function historyLabel(cmd){return String(cmd?.label||'上一個操作')}
+3253: function historyEntityCurrent(change){
+3254:   if(!change)return null;
+3255:   if(change.collection==='weeks')return state.weeks?.[change.key]?deepClone(state.weeks[change.key]):null;
+3256:   if(change.collection==='meta')return deepClone(state.meta||{});
+3257:   const list=state?.[change.collection];
+3258:   if(!Array.isArray(list))return null;
+3259:   const row=list.find(x=>x.id===change.key);
+3260:   return row?deepClone(row):null;
+3261: }
+3262: function historyComparable(value){
+3263:   // Canonicalize recursively before comparing history snapshots.
+3264:   // Supabase/JSONB may return the exact same object with keys in a different order;
+3265:   // JSON.stringify on raw objects would then produce a false multi-user conflict.
+3266:   if(value==null)return null;
+3267:   if(Array.isArray(value))return value.map(historyComparable);
+3268:   if(typeof value==='object'){
+3269:     const out={};
+3270:     for(const key of Object.keys(value).filter(k=>k!=='updatedAt').sort()){
+3271:       out[key]=historyComparable(value[key]);
+3272:     }
+3273:     return out;
+3274:   }
+3275:   return value;
+3516:   try{const res=await titvBackendFetch(`/.netlify/functions/taiwan-holidays?year=${year}`,{headers:{Accept:'application/json'}});if(!res.ok)throw new Error(`HTTP ${res.status}`);const payload=await res.json();if(payload?.dates&&typeof payload.dates==='object'){const merged={...fixedTaiwanHolidays(year),...payload.dates};taiwanHolidayYears.set(year,merged);writeHolidayCache(year,merged,payload.source||'政府行政機關辦公日曆資料');if(weekDates(currentWeek).some(d=>d.startsWith(`${year}-`)))renderSchedule();}}
+3996:   if(!(id==='eventModal'&&el.classList.contains('temp-floating')))document.body.style.overflow='hidden';else document.body.style.overflow='';
+3997: }
+3998: function closeModal(id){
+3999:   const el=$(id);if(!el)return;el.classList.remove('open');el.setAttribute('aria-hidden','true');
+4000:   if(id==='eventModal'){
+4001:     el.classList.remove('temp-floating');const card=el.querySelector('.modal-card');
+4002:     if(card){card.style.left='';card.style.top='';card.style.right='';card.style.bottom='';card.setAttribute('aria-modal','true')}
+4003:     if($('eventShiftKind'))$('eventShiftKind').disabled=false;
+4004:     temporaryFloatingAnchor=null;temporaryFloatingPosition=null;
+4005:   }
+4006:   if(!$$('.modal-backdrop.open').length)document.body.style.overflow='';
+4007: }
+4008: async function loadViewerWeek(weekStart=currentWeek){
+4009:   if(!viewerMode||!viewerEmployeeNumber)return;
+4010:   const url=`${String(cloudCfg.url||'').replace(/\/$/,'')}/functions/v1/schedule-viewer`;
+4011:   const res=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json','apikey':cloudCfg.key||''},body:JSON.stringify({employeeNumber:viewerEmployeeNumber,weekStart})});
+4012:   const payload=await res.json().catch(()=>({}));if(!res.ok||!payload.ok)throw new Error(payload.error||'讀取班表失敗');
+4013:   currentOrg={id:payload.org.id,name:payload.org.name,invite_code:null};currentMembership={role:'viewer'};viewerEmployee={id:payload.employee.id,name:payload.employee.name,employeeNumber:payload.employee.employeeNumber};
+4014:   state.meta={...(state.meta||{}),orgName:payload.org.name};state.employees=(payload.employees||[]).map((x,i)=>({id:x.id,name:x.name,employeeNumber:x.employeeNumber||'',email:'',roles:[],active:x.active!==false,order:i+1,note:'',notifyPublish:false,notifyChange:false,notifyEmergency:false,notifyCancel:false}));
+4015:   state.events=(payload.events||[]).map(x=>({id:x.id,date:x.work_date,start:String(x.start_time||'').slice(0,5),end:String(x.end_time||'').slice(0,5),title:x.title,type:x.category,location:x.location||'',notes:'',status:'published',required:x.required_roles||{},assignments:x.assignments||{},color:normalizeEventColor(x.event_color||x.color,x.category),updatedAt:x.updated_at||''}));
+4016:   // 員工編號唯讀模式載入已發布週的休假狀態；顯示完整假別，但不回傳管理備註。
+4017:   state.leaves=(payload.leaves||[]).map((x,i)=>({id:x.id||`viewer-leave-${weekStart}-${i}`,employeeId:x.employeeId||x.employee_id,date:x.date||x.work_date,type:String(x.type||x.leave_type||'休假'),note:''})).filter(x=>x.employeeId&&x.date);
+4018:   state.templates=[];state.weeks={[weekStart]:{status:payload.week?.status||'draft',version:Number(payload.week?.version||1),publishedAt:payload.week?.published_at||null}};currentWeek=weekStart;leaveWeek=weekStart;
+4019: }
+4020: async function loginViewerByEmployeeNumber(raw){
+4021:   const no=normalizeEmployeeNumber(raw);if(!/^[A-Z0-9_-]{2,32}$/.test(no))throw new Error('請輸入正確的公司員工編號。');viewerMode=true;viewerScheduleScope='mine';viewerEmployeeNumber=no;cloudUser=null;memberships=[];stopRealtime();await loadViewerWeek(currentWeek);currentView='schedule';hideAuthGate();renderAll();toast('已進入唯讀班表',`${viewerEmployee?.name||''}｜${no}`,'success');
+4022: }
+4023: async function changeScheduleWeek(days){currentWeek=days===0?mondayISO(localDateISO()):addDays(currentWeek,days);if(viewerMode){try{await loadViewerWeek(currentWeek)}catch(e){toast('讀取失敗',e.message,'error')}}renderSchedule();}
+4024: function showAuthGate(){setMobileSidebar(false);const gate=$('authGate');if(!gate)return;document.body.classList.add('auth-active');gate.classList.remove('hidden');gate.setAttribute('aria-hidden','false');$('appShell')?.classList.add('hidden');$('mobileNav')?.classList.add('hidden');$('authBackLocal')?.classList.toggle('hidden',cloudCfg.forceCloud);}
+4025: function hideAuthGate(){const gate=$('authGate');if(!gate)return;document.body.classList.remove('auth-active');gate.classList.add('hidden');gate.setAttribute('aria-hidden','true');$('appShell')?.classList.remove('hidden');$('mobileNav')?.classList.remove('hidden');}
+4026: 
+4027: function syncHistoryVisibility(){
+4028:   const wrap=document.querySelector('.history-actions');
+4029:   if(!wrap)return;
+4030:   const shouldShow=!viewerMode&&currentView==='schedule';
+4031:   wrap.classList.toggle('hidden',!shouldShow);
+4032: }
+4033: function setView(view){
+4034:   if(viewerMode)view='schedule';
+4035:   if(!viewMeta[view])view='dashboard';currentView=view;storageSet(VIEW_KEY,view);
+4036:   $$('.view').forEach(v=>v.classList.toggle('active',v.id===`view-${view}`));
+4037:   $$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+4038:   const [k,t,s]=viewMeta[view];$('pageKicker').textContent=k;$('pageTitle').textContent=t;$('pageSubtitle').textContent=s;
+4039:   syncTopbarQuickAction();
+4040:   syncHistoryVisibility();
+4041:   if(innerWidth<=900)setMobileSidebar(false);
+4042:   renderCurrentView();
+4043:   if(view==='audit'&&cloudActive())setTimeout(()=>refreshAuditRecords({silent:true}),0);
+4044:   if(view==='settings'&&cloudActive())setTimeout(()=>fetchLineStatus({silent:true}),0);
+4045: }
+4046: function syncTopbarQuickAction(){
+4047:   const btn=$('quickAddBtn');if(!btn)return;
+4048:   const editable=canEdit();
+4049:   const map={schedule:'新增工作',staff:'新增人員',leave:'新增休假',templates:'新增模板'};
+4050:   const label=map[currentView]||'';
+4051:   btn.classList.toggle('hidden',!label||!editable);
+4052:   btn.disabled=!editable||!label;
+4053:   btn.title=!editable?'目前帳號只有檢視權限':label;
+4054:   btn.setAttribute('aria-label',label||'新增');
+4055:   btn.dataset.quickAction=currentView;
+4056:   const icon=btn.querySelector('use');
+4057:   if(icon)icon.setAttribute('href','#i-add');
+4058:   const textNode=btn.childNodes[btn.childNodes.length-1];
+4059:   if(textNode&&textNode.nodeType===3)textNode.textContent=label;
+4060:   else if(btn.lastChild)btn.lastChild.textContent=label;
+4061: }
+4062: function renderCurrentView(){
+4063:   if(currentView==='dashboard')renderDashboard();
+4064:   if(currentView==='schedule')renderSchedule();
+4065:   if(currentView==='staff')renderStaff();
+4066:   if(currentView==='leave')renderLeave();
+4067:   if(currentView==='compliance')renderCompliance();
+4068:   if(currentView==='templates')renderTemplates();
+4069:   if(currentView==='audit')renderAudit();
+4070:   if(currentView==='settings')renderSettings();
+4071: }
+4072: function renderAll(){
+4073:   renderBrand();renderAccount();renderPermissionUI();renderDashboard();renderSchedule();renderStaff();renderLeave();renderCompliance();renderTemplates();renderAudit();renderSettings();setView(currentView);
+4074: }
+4075: function renderBrand(){
+4076:   const orgName=state.meta?.orgName||currentOrg?.name||'工程部';
+4077:   const systemName=state.meta?.systemName||'製播排班系統';
+4078:   const brandOrg=$('brandOrg');if(brandOrg)brandOrg.textContent=orgName;
+4079:   const brandSystem=$('brandSystem');if(brandSystem)brandSystem.textContent=systemName;
+4080:   const authOrgTitle=$('authOrgTitle');if(authOrgTitle)authOrgTitle.textContent=orgName;
+4081:   const logo=DEFAULT_LOGO_DATA;
+4082:   if(state.meta)state.meta.logoDataUrl=DEFAULT_LOGO_DATA;
+4083:   const authLogo=$('authCompanyLogo');if(authLogo){authLogo.src=logo;authLogo.onerror=()=>{authLogo.onerror=null;authLogo.src=DEFAULT_LOGO_DATA;};}
+4084:   const host=$('brandLogo');
+4085:   if(host){host.className='';host.innerHTML=`<img src="${logo}" alt="TITV 原住民族電視台 LOGO" onerror="this.onerror=null;this.src='${DEFAULT_LOGO_DATA}'">`;}
+4086: }
+4087: function setTextSafe(id,value){const el=$(id);if(el)el.textContent=value;}
+4088: function setClassSafe(id,value){const el=$(id);if(el)el.className=value;}
+4089: function renderConnectionStatus(){
+4090:   if(viewerMode){setClassSafe('workspaceDot','status-dot online');setTextSafe('workspaceMode',currentOrg?.name||'唯讀班表');setTextSafe('topConnectionText','員工唯讀');setTextSafe('dashboardConnectionBadge','唯讀');setClassSafe('dashboardConnectionBadge','pill neutral');setTextSafe('dashboardRealtimeStatus','唯讀連線');setTextSafe('dashboardPermission','員工唯讀');return;}
+4091:   const active=cloudActive();const configured=isCloudConfigured();
+4092:   let dotClass='local',top='本機模式',workspace='本機工作空間',dash='本機',dashClass='neutral',rt='未啟用';
+4093:   if(configured&&!cloudBypass&&!cloudUser){dotClass='warning';top='待登入';workspace='雲端待登入';dash='待登入';dashClass='warning';rt='待登入';}
+4094:   if(active){
+4095:     workspace=currentOrg?.name||'雲端工作空間';dashClass='success';
+4096:     if(realtimeStatus==='connected'){dotClass='online';top='即時同步';dash='雲端即時';rt='已連線';}
+4097:     else if(realtimeStatus==='connecting'){dotClass='warning';top='連線中';dash='連線中';dashClass='warning';rt='連線中';}
+4098:     else if(['error','timeout','closed','degraded'].includes(realtimeStatus)){dotClass='warning';top='雲端同步';dash='雲端同步';dashClass='warning';rt='自動重連中';}
+4099:     else{dotClass='warning';top='雲端已登入';dash='雲端';dashClass='warning';rt='準備連線';}
+4100:   }
+4101:   setClassSafe('workspaceDot',`status-dot ${dotClass}`);setTextSafe('workspaceMode',workspace);
+4102:   setTextSafe('topConnectionText',top);const quick=$('cloudQuickBtn');if(quick){quick.className=`connection-chip ${realtimeStatus==='connected'?'online':'local'}`;const qdot=quick.querySelector('.status-dot');if(qdot)qdot.className=`status-dot ${dotClass}`;}
+4103:   setTextSafe('dashboardConnectionBadge',dash);setClassSafe('dashboardConnectionBadge',`pill ${dashClass}`);
+4104:   setTextSafe('dashboardRealtimeStatus',rt);setTextSafe('dashboardPermission',roleLabel(currentMembership?.role||'owner'));
+4105: }
+4106: function renderAccount(){
+4107:   const name=viewerMode?(viewerEmployee?.name||'一般同仁'):(cloudUser?.user_metadata?.display_name||cloudUser?.email?.split('@')[0]||'本機管理員');const email=viewerMode?`員工編號 ${viewerEmployee?.employeeNumber||''}`:(cloudUser?.email||'尚未連線雲端');const role=viewerMode?'員工唯讀':roleLabel(currentMembership?.role||'owner');
+4108:   setTextSafe('accountAvatar',initials(name));setTextSafe('accountName',name);setTextSafe('accountRole',role);setTextSafe('menuAccountName',name);setTextSafe('menuAccountEmail',email);
+4109:   ['logoutBtn','topLogoutBtn','sidebarLogoutBtn'].forEach(id=>{const el=$(id);if(el)el.classList.toggle('hidden',!cloudUser&&!viewerMode)});const switchBtn=$('switchWorkspaceBtn');if(switchBtn)switchBtn.classList.toggle('hidden',memberships.length<2);
+4110:   const sessionCard=$('accountSessionCard');if(sessionCard)sessionCard.classList.toggle('hidden',!cloudUser);if($('settingsAccountEmail'))$('settingsAccountEmail').textContent=email;if($('settingsAccountRole'))$('settingsAccountRole').textContent=role;
+4111:   renderConnectionStatus();
+4112: }
+4113: function renderPermissionUI(){
+4114:   const editable=canEdit(),admin=canAdmin();document.body.classList.toggle('viewer-mode',viewerMode);$$('[data-edit-action]').forEach(b=>{b.disabled=!editable;b.title=editable?'':'目前帳號只有檢視權限'});$$('[data-admin-action]').forEach(b=>{b.disabled=!admin;b.title=admin?'':'需要管理員權限'});$$('.side-nav [data-view],#mobileNav [data-view]').forEach(b=>{if(viewerMode)b.classList.toggle('hidden',b.dataset.view!=='schedule');else b.classList.remove('hidden')});$('readonlyBanner').classList.toggle('hidden',editable);$('viewerScopeSwitch')?.classList.toggle('hidden',!viewerMode);$('viewerScopeMine')?.classList.toggle('active',viewerMode&&viewerScheduleScope==='mine');$('viewerScopeAll')?.classList.toggle('active',viewerMode&&viewerScheduleScope==='all');if($('scheduleHint'))$('scheduleHint').textContent=editable?'單擊排班＝選取；Delete＝刪除；雙擊＝編輯。複製後單擊目標格，再按貼上。':'唯讀模式｜可切換「只看我的班／查看全部人員」，並顯示當週休假與完整假別。';syncTopbarQuickAction();syncHistoryVisibility();updateHistoryUI();
+4115: }
+4116: 
+4117: function weekEvents(base=currentWeek){const ds=new Set(weekDates(base));return activeEvents().filter(e=>ds.has(e.date))}
+4118: function weekLeaves(base=currentWeek){const ds=new Set(weekDates(base));return state.leaves.filter(l=>ds.has(l.date))}
+4119: function leaveFor(employeeId,date){return state.leaves.find(l=>l.employeeId===employeeId&&l.date===date)}
+4120: function missingForEvent(e){
+4121:   const out=[];for(const role of ROLE_KEYS){const need=Number(e.required?.[role]||0),have=(e.assignments?.[role]||[]).filter(Boolean).length;if(have<need)out.push({role,count:need-have});}return out;
+4122: }
+4123: function eventIssues(e){
+4124:   return previewEventValidation(e).map(x=>({type:x.type,text:`${x.title}｜${x.detail}`}));
+4125: }
+4126: function weekIssues(base=currentWeek){
+4127:   const es=weekEvents(base),out=[],pairSeen=new Set();
+4128:   for(const e of es){
+4129:     for(const m of missingForEvent(e))out.push({type:'warning',code:'SHIFT-MISSING',title:`${e.title} 缺員`,detail:`${zhDate(e.date)} ${e.start}｜尚缺 ${m.role} × ${m.count}`,targetEventId:e.id,targetEventIds:[e.id],targetDate:e.date,hardBlock:false});
+4130:     for(const pid of eventPeople(e)){const l=leaveFor(pid,e.date);if(l&&leaveConflictsWithEvent(l,e))out.push({type:'danger',code:'SHIFT-LEAVE',title:`${employeeName(pid)} 休假衝突`,detail:`${e.title}｜${leaveDisplayLabel(l)}，與 ${e.start}–${e.end} 勤務衝突`,targetEventId:e.id,targetEventIds:[e.id],targetDate:e.date,employeeId:pid,hardBlock:true});}
+4131:   }
+4132:   for(let i=0;i<es.length;i++)for(let j=i+1;j<es.length;j++){const a=es[i],b=es[j];if(a.date!==b.date||minutes(a.start)>=minutes(b.end)||minutes(a.end)<=minutes(b.start))continue;for(const pid of eventPeople(a).filter(x=>eventPeople(b).includes(x))){const key=[a.id,b.id,pid].sort().join('|');if(pairSeen.has(key))continue;pairSeen.add(key);out.push({type:'danger',code:'SHIFT-001',title:`${employeeName(pid)} 排班重疊`,detail:`${zhDate(a.date)}｜${a.title} ${a.start}–${a.end} / ${b.title} ${b.start}–${b.end}`,targetEventId:a.id,targetEventIds:[a.id,b.id],targetDate:a.date,employeeId:pid,hardBlock:true});}}
+4133:   for(const x of laborWeekIssues(base))out.push({...x});
+4134:   const seen=new Set();return out.filter(x=>{const k=`${x.code}|${x.title}|${x.detail}`;if(seen.has(k))return false;seen.add(k);return true});
+4135: }
+4136: function focusScheduleEventCard(eventId){
+4288: 
+4289: 
+4290: function renderDashboard(){
+4291:   const today=localDateISO(),d=parseDateOnly(today);$('heroWeekday').textContent=new Intl.DateTimeFormat('en-US',{weekday:'short',timeZone:'UTC'}).format(d).toUpperCase();$('heroDay').textContent=String(d.getUTCDate()).padStart(2,'0');$('heroMonth').textContent=new Intl.DateTimeFormat('en-US',{month:'short',year:'numeric',timeZone:'UTC'}).format(d).toUpperCase();$('todayHeading').textContent=`${zhDate(today)}｜今日製播`;
+4292:   const todays=activeEvents().filter(e=>e.date===today).sort((a,b)=>a.start.localeCompare(b.start));$('todaySummary').textContent=todays.length?`今天共有 ${todays.length} 項製播工作，最早 ${todays[0].start} 開始。`:'今天目前沒有安排製播工作。';
+4293:   $('todayRunList').innerHTML=todays.length?todays.map(e=>{const rs=eventRuntimeStatus(e);const color=normalizeEventColor(e.color,e.type);const place=e.location||'未指定地點';const crew=eventPeopleRoleSummary(e);return `<div class="run-item runtime-${esc(rs.kind)}"><div class="run-time"><strong>${esc(e.start)}</strong><small>${esc(e.end)}</small></div><div class="run-main"><strong>${esc(e.title)}</strong><p class="run-location">${esc(place)}</p><p class="run-crew">${esc(crew)}</p></div><div class="run-right"><span class="run-status ${esc(rs.kind)}"><span class="pulse-dot"></span>${esc(rs.text)}</span><span class="run-color" style="background:${color}"></span></div></div>`}).join(''):`<div class="empty-state">今天沒有工作，可從週間排班新增。</div>`;
+4294:   const m=dashboardMetrics(mondayISO(today));$('metricEvents').textContent=m.events;$('metricMissing').textContent=m.missing;$('metricConflicts').textContent=m.conflicts;$('metricLeave').textContent=m.leave;renderAlerts('dashboardAlerts',m.issues,6);
+4295:   renderScheduleHealth(mondayISO(today));$('dashboardDataStatus').textContent=`${state.events.length} 筆工作已載入`;renderConnectionStatus();
+4296: }
+4297: 
+4298: // One complete weekly schedule on one A4 landscape sheet.
+4299: // Lay out the seven-day table at the printable A4 aspect ratio.
+4300: // Text, cards and rows are measured together; the long PNG export is independent.
+4301: function buildSchedulePrintSvg(base=currentWeek){
+4302:   const W=1400,H=W*199/287,pad=3,leftW=56,brandH=66,headH=64,gap=8;
+4303:   const gridX=pad,gridW=W-pad*2,dayW=(gridW-leftW)/7,leaveW=gridW/7;
+4304:   const headerY=pad+brandH,bodyY=headerY+headH;
+4305:   const ds=weekDates(base),filter=activeScheduleStaffFilter();
+4306:   const events=activeEvents().filter(e=>ds.includes(e.date)&&(!filter||eventPeople(e).includes(filter)));
+4307:   const byDay=Object.fromEntries(ds.map(d=>[d,events.filter(e=>e.date===d).sort((a,b)=>minutes(a.start)-minutes(b.start)||String(a.title||'').localeCompare(String(b.title||''),'zh-Hant'))]));
+4308:   const bounds=scheduleTimeBounds(ds,filter),timeSet=new Set();
+4309:   for(let t=bounds.start;t<=bounds.end;t+=60)timeSet.add(`${String(Math.floor(t/60)%24).padStart(2,'0')}:00`);
+4310:   events.forEach(e=>timeSet.add(e.start));
+4311:   const times=[...timeSet].sort((a,b)=>minutes(a)-minutes(b));
+4312:   const leaves=ds.map(d=>(state.leaves||[]).filter(l=>l.date===d&&leaveDisplaysInWeeklyStatus(l.type)).sort((a,b)=>employeeName(a.employeeId).localeCompare(employeeName(b.employeeId),'zh-Hant')));
+4313:   const escape=value=>svgEscape(value==null?'':String(value));
+4314:   // Conservative glyph widths keep Chinese and Latin text clear of cell borders.
+4315:   const textWidth=(text,size)=>Array.from(String(text)).reduce((n,c)=>n+(/\s/u.test(c)?.34:/[MW@%]/.test(c)?.92:/[\x20-\x7e]/.test(c)?.66:1.04)*size,0);
+4316:   const wrap=(text,size,width)=>{
+4317:     const out=[];
+4318:     for(const paragraph of String(text||'').split(/\r?\n/)){
+4319:       let line='';
+4320:       const tokens=paragraph.match(/[A-Za-z0-9]+(?:[.:/－-][A-Za-z0-9]+)*|[^\r\n]/gu)||[];
+4321:       for(const token of tokens){
+4322:         const pieces=textWidth(token,size)>width?Array.from(token):[token];
+4323:         for(const piece of pieces){
+4324:           if(line&&textWidth(line+piece,size)>width){out.push(line.trimEnd());line='';}
+4325:           line+=line?piece:piece.trimStart();
+4326:         }
+4327:       }
+4328:       if(line)out.push(line);
+4329:     }
+4330:     return out;
+4331:   };
+4332:   const measure=scale=>{
+4333:     const font={title:16*scale,location:11.5*scale,crew:13*scale,leave:11.5*scale};
+4334:     const titleLine=19*scale,locationLine=14*scale,crewLine=16*scale,leaveLine=14*scale;
+4335:     const cardGap=4*scale,cardPad=5*scale,cardW=dayW-10*scale,innerW=cardW-cardPad*2;
+4336:     const card=e=>{
+4337:       const titles=wrap(e.title||'未命名工作',font.title,innerW);
+4338:       const locations=wrap(e.location||'',font.location,innerW);
+4339:       const groups=buildEventAssignmentGroups(e),assignments=[...groups.primary,...groups.support];
+4340:       const crew=assignments.length?assignments.map(g=>wrap(`${g.role} ${g.names.join('、')}`,font.crew,(innerW-8*scale)/2)):[['尚未排人']];
+4341:       const crewHeights=[];
+4342:       for(let i=0;i<crew.length;i+=2)crewHeights.push(Math.max(crew[i].length,crew[i+1]?.length||0)*crewLine);
+4343:       const height=cardPad*2+titles.length*titleLine+locations.length*locationLine+5*scale+crewHeights.reduce((a,b)=>a+b,0);
+4344:       return {event:e,titles,locations,crew,crewHeights,height};
+4345:     };
+4346:     const rows=times.map(time=>{
+4347:       const days=ds.map(d=>byDay[d].filter(e=>e.start===time).map(card));
+4348:       const stacks=days.map(cards=>cards.reduce((sum,c)=>sum+c.height,0)+Math.max(0,cards.length-1)*cardGap);
+4349:       return {time,days,stacks,height:Math.max(16*scale,...stacks.map(h=>h+6*scale)),occupied:days.some(cards=>cards.length)};
+4350:     });
+4351:     const chipW=(leaveW-14*scale)/2;
+4352:     const chips=leaves.map(day=>day.map(l=>{
+4353:       const type=canonicalLeaveType(l.type),label=`${employeeName(l.employeeId)} · ${type}`;
+4354:       return {type,label,lines:wrap(label,font.leave,chipW-8*scale)};
+4524:   return `<div class="temp-float-head"><span class="temp-float-badge">臨時</span><span class="temp-float-time">${esc(e.start)}–${esc(e.end)}</span></div><div class="temp-float-reason">${esc(reason)}</div><div class="temp-float-title">${esc(e.title||'臨時插班')}</div><div class="temp-float-meta">${esc(e.location||'未指定地點')}</div><div class="temp-float-crew">${esc(crew)}</div>`;
+4525: }
+4526: function renderMobileEventCard(e){
+4527:   const groups=buildEventAssignmentGroups(e);
+4528:   const lines=[...groups.primary,...groups.support].map(g=>`<div class="mobile-event-line"><span class="event-role">${esc(g.role)}</span><span class="event-name">${esc(g.names.join('、'))}</span></div>`).join('') || '<div class="mobile-event-line empty"><span class="event-name">尚未排人</span></div>';
+4529:   return `<div class="mobile-event-top"><strong>${esc(e.title)}</strong><span>${esc(e.location||'未指定地點')} · ${esc(e.start)} 開始</span></div><div class="mobile-event-lines">${lines}</div>`;
+4530: }
+4531: 
+4532: function computeVisualScheduleLayout(events,START,pxPerMinute){
+4533:   const rows=(events||[]).map(e=>{
+4534:     const groups=buildEventAssignmentGroups(e);
+4535:     const roleRows=Math.max(1,groups.primary.length+groups.support.length);
+4536:     const titleRows=Math.max(1,Math.ceil(String(e.title||'').length/11));
+4537:     const locationRows=e.location?1:0;
+4538:     const contentMin=26+titleRows*22+locationRows*16+roleRows*20+12;
+4539:     const startM=minutes(e.start),endM=Math.max(startM+15,minutes(e.end));
+4540:     const timeTop=Math.max(0,(startM-START)*pxPerMinute);
+4541:     const duration=Math.max(15,endM-startM);
+4542:     const timedHeight=Math.max(66,duration*pxPerMinute-4);
+4543:     return {e,startM,endM,timeTop,height:Math.max(contentMin,timedHeight),top:timeTop,bottom:0,lane:0,laneCount:1,group:0};
+4544:   }).sort((a,b)=>a.startM-b.startM||a.endM-b.endM);
+4545: 
+4546:   // V3.20.8：不論時間是否重疊，一律維持單欄完整寬度。
+4547:   // 若工作在視覺上會碰撞，後一張只往下順排，不左右分欄、不互相覆蓋。
+4548:   let maxBottom=0;
+4549:   for(const row of rows){
+4550:     row.lane=0;
+4551:     row.laneCount=1;
+4552:     const minTop=maxBottom?maxBottom+8:0;
+4553:     row.top=Math.max(row.timeTop,minTop);
+4554:     row.bottom=row.top+row.height;
+4555:     maxBottom=row.bottom;
+4556:   }
+4557:   return {rows,maxBottom};
+4558: }
+4559: 
+4560: function setTemporaryPlacementMode(active){
+4561:   temporaryPlacementMode=Boolean(active);
+4562:   document.querySelector('#view-schedule')?.classList.toggle('temporary-placement-mode',temporaryPlacementMode);
+4563:   $('tempShiftBtn')?.classList.toggle('active',temporaryPlacementMode);
+4564:   if(!temporaryPlacementMode)return;
+4565:   clearScheduleSelection();toast('臨時插班模式','請直接點選班表中的日期／時間格，再於浮動視窗填寫資料。','warning');
+4566: }
+4567: function positionTemporaryFloatingModal(anchorEl=temporaryFloatingAnchor,{force=false}={}){
+4568:   const modal=$('eventModal');if(!modal?.classList.contains('open')||!modal.classList.contains('temp-floating'))return;
+4569:   const card=modal.querySelector('.modal-card');if(!card)return;temporaryFloatingAnchor=anchorEl||temporaryFloatingAnchor;
+4570:   if(window.innerWidth<=860){card.style.left='';card.style.top='';temporaryFloatingPosition=null;return}
+4571:   const gap=12,edge=12,width=Math.min(560,window.innerWidth-edge*2);card.style.width=`${width}px`;
+4572:   const h=Math.min(card.scrollHeight||720,Math.floor(window.innerHeight*.78));
+4573:   if(!temporaryFloatingPosition||force){const r=temporaryFloatingAnchor?.getBoundingClientRect?.();let left=r?Math.round(r.right+gap):window.innerWidth-width-edge;if(left+width>window.innerWidth-edge)left=r?Math.round(r.left-width-gap):window.innerWidth-width-edge;left=Math.max(edge,Math.min(left,window.innerWidth-width-edge));let top=r?Math.round(r.top):78;top=Math.max(edge,Math.min(top,window.innerHeight-h-edge));temporaryFloatingPosition={left,top}}
+4574:   else{temporaryFloatingPosition.left=Math.max(edge,Math.min(temporaryFloatingPosition.left,window.innerWidth-width-edge));temporaryFloatingPosition.top=Math.max(edge,Math.min(temporaryFloatingPosition.top,window.innerHeight-h-edge))}
+4575:   card.style.left=`${temporaryFloatingPosition.left}px`;card.style.top=`${temporaryFloatingPosition.top}px`;card.style.right='auto';card.style.bottom='auto';
+4576: }
+4577: function openTemporaryShiftAtCell(cell){
+4578:   if(!cell||!canEdit()||viewerMode)return;const date=cell.dataset.date||currentWeek,start=cell.dataset.time||'10:00';
+4579:   setTemporaryPlacementMode(false);openEventModal(null,null,{temporary:true,date,start,end:scheduleContextEndTime(start),anchorEl:cell});
+4580: }
+4581: 
+4582: function renderSchedule(){
+4583:   const ds=weekDates(currentWeek);const filter=activeScheduleStaffFilter();refreshEmployeeOptions();ensureHolidayYearsForWeek(currentWeek);
+4584:   $('weekRange').textContent=`${ds[0].replaceAll('-', '/')} — ${ds[6].replaceAll('-', '/')}`;
+4585:   renderPendingChangeNotificationState();
+4586:   refreshPendingChangeNotifications(currentWeek).catch(console.warn);
+4587:   const headers=['',...ds].map((d,i)=>{
+4588:     if(i===0)return '<div class="time-head"><span>時間</span></div>';
+4589:     const dateObj=parseDateOnly(d),weekday=new Intl.DateTimeFormat('zh-TW',{weekday:'long',timeZone:'UTC'}).format(dateObj);
+4590:     const holiday=holidayForDate(d);
+4591:     return `<div class="date-head ${d===localDateISO()?'today':''} ${holiday?'is-national-holiday':''}" data-schedule-date="${d}" data-schedule-time="10:00" ${holiday?`title="台灣國定假日：${esc(holiday)}"`:''}><small>${weekday}</small><strong>${String(dateObj.getUTCDate()).padStart(2,'0')}</strong>${holiday?`<span class="holiday-name">${esc(holiday)}</span>`:''}</div>`;
+4592:   }).join('');
+4593:   $('timelineHeader').innerHTML=headers;
+4594: 
+4595:   const weekEventsFiltered=activeEvents().filter(e=>ds.includes(e.date)&&(!filter||eventPeople(e).includes(filter)));
+4596:   const bounds=scheduleTimeBounds(ds,filter);
+4597:   const times=new Set();
+4598:   for(let t=bounds.start;t<=bounds.end;t+=60)times.add(`${String(Math.floor(t/60)%24).padStart(2,'0')}:00`);
+4599:   weekEventsFiltered.forEach(e=>times.add(e.start));
+4600:   const sortedTimes=[...times].sort((a,b)=>minutes(a)-minutes(b));
+4601: 
+4602:   const rows=sortedTimes.map(time=>{
+4603:     const cells=ds.map(date=>{
+4604:       const es=weekEventsFiltered.filter(e=>e.date===date&&e.start===time).sort((a,b)=>a.title.localeCompare(b.title,'zh-Hant'));
+4605:       const regular=es.filter(e=>!isTemporaryEvent(e)),temporary=es.filter(isTemporaryEvent);
+4606:       const cards=regular.map(e=>{const issues=eventIssues(e);return `<button class="timeline-event indigenous-card ${esc(e.type)} ${issues.length?'issue':''}" data-event-id="${e.id}" draggable="${canEdit()&&!window.matchMedia('(pointer:coarse)').matches?'true':'false'}" type="button" style="--event-color:${normalizeEventColor(e.color,e.type)};--event-bg:${eventPastelColor(e.color,e.type,.82)};--event-fg:#263849" title="${esc(issues.map(x=>x.text).join('；'))}">${renderDesktopEventCard(e)}</button>`;}).join('');
+4607:       const floats=temporary.map((e,idx)=>{const issues=eventIssues(e);return `<button class="timeline-event temporary-float-card ${esc(e.type)} ${issues.length?'issue':''}" data-event-id="${e.id}" draggable="${canEdit()&&!window.matchMedia('(pointer:coarse)').matches?'true':'false'}" type="button" style="--temp-index:${idx};--event-color:${normalizeEventColor(e.color,e.type)}" title="${esc(issues.map(x=>x.text).join('；'))}">${renderTemporaryDesktopCard(e)}</button>`}).join('');
+4608:       const empty=!cards&&!floats?'<span class="schedule-empty-dot">—</span>':'';
+4609:       return `<div class="day-track schedule-day-cell ${date===localDateISO()?'today':''} ${temporary.length?'has-temporary-floats':''}" data-date="${date}" data-time="${time}">${cards}${empty}${floats}</div>`;
+4610:     }).join('');
+4611:     return `<div class="schedule-time-row"><div class="schedule-time-cell"><span>${esc(time)}</span></div>${cells}</div>`;
+4612:   }).join('');
+4613:   $('timelineBody').innerHTML=rows||'<div class="schedule-no-data">本週尚無排班</div>';
+4614: 
+4615:   $('mobileSchedule').innerHTML=ds.map(date=>{const es=activeEvents().filter(e=>e.date===date&&(!filter||eventPeople(e).includes(filter))).sort((a,b)=>a.start.localeCompare(b.start)),holiday=holidayForDate(date);return `<section class="mobile-day ${holiday?'is-national-holiday':''}" data-date="${date}"><div class="mobile-day-head"><strong>${esc(zhDate(date))}${holiday?`<span class="mobile-holiday-badge">${esc(holiday)}</span>`:''}</strong><span>${es.length} 項工作</span></div>${es.length?es.map(e=>`<button class="mobile-event ${esc(e.type)} ${isTemporaryEvent(e)?'temporary-floating-mobile':''}" data-event-id="${e.id}" type="button" style="--event-color:${normalizeEventColor(e.color,e.type)};--event-bg:${eventPastelColor(e.color,e.type,.80)};--event-fg:#263849">${isTemporaryEvent(e)?'<span class="mobile-temp-badge">臨時</span>':''}${renderMobileEventCard(e)}</button>`).join(''):'<div class="empty-state">沒有排班</div>'}</section>`}).join('');
+4616:   if(selectedScheduleEventId&&!weekEventsFiltered.some(e=>e.id===selectedScheduleEventId))selectedScheduleEventId='';
+4617:   if(selectedScheduleTarget.date&&!ds.includes(selectedScheduleTarget.date))selectedScheduleTarget={date:'',time:''};
+4618:   $$('[data-event-id]').forEach(b=>{
+4619:     b.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();selectScheduleEvent(b.dataset.eventId);});
+4620:     b.addEventListener('dblclick',ev=>{ev.preventDefault();ev.stopPropagation();if(!canEdit())return;const item=state.events.find(x=>x.id===b.dataset.eventId);openEventModal(b.dataset.eventId,null,isTemporaryEvent(item)?{anchorEl:b.closest('.schedule-day-cell')}:{})});
+4621:   });
+4622:   $$('.schedule-day-cell').forEach(cell=>cell.addEventListener('click',ev=>{if(ev.target.closest('[data-event-id]'))return;ev.preventDefault();if(temporaryPlacementMode){openTemporaryShiftAtCell(cell);return}selectScheduleTarget(cell.dataset.date,cell.dataset.time)}));
+4623:   bindScheduleDragDrop();updateScheduleSelectionUI();
+4624:   renderAlerts('scheduleAlerts',weekIssues(currentWeek));renderWeeklyLeaveSummary(currentWeek);renderScheduleHealth();renderPrintSchedule();renderDashboard();
+4625: }
+4626: function refreshEmployeeOptions(){
+4627:   const staff=state.employees.filter(e=>e.active).sort((a,b)=>(a.order||0)-(b.order||0));const opts=staff.map(e=>`<option value="${e.id}">${esc(e.name)}｜${esc(e.roles.join('/'))}</option>`).join('');
+4628:   const f=$('scheduleStaffFilter');if(f){const v=f.value;f.innerHTML='<option value="">全部人員</option>'+opts;if([...f.options].some(o=>o.value===v))f.value=v;}
+4629:   const le=$('leaveEmployee');if(le){const v=le.value;le.innerHTML=opts;if([...le.options].some(o=>o.value===v))le.value=v;}
+4630: }
+4631: function renderStaff(){
+4632:   refreshEmployeeOptions();
+4633:   const all=state.employees.slice().sort((a,b)=>(a.order||0)-(b.order||0));
+4634:   const q=String($('staffSearch')?.value||'').trim().toLowerCase();
+4635:   const role=$('staffRoleFilter')?.value||'';
+4636:   const status=$('staffStatusFilter')?.value||'';
+4637:   const normalized=x=>String(x||'').toLowerCase();
+4638:   const list=all.filter(e=>{
+4639:     if(q&&!`${normalized(e.name)} ${normalized(e.employeeNumber)} ${normalized(e.email)} ${normalized((e.roles||[]).join(' '))}`.includes(q))return false;
+4640:     if(role&&!(e.roles||[]).includes(role))return false;
+4641:     if(status==='active'&&!e.active)return false;
+4642:     if(status==='inactive'&&e.active)return false;
+4643:     if(status==='missing-number'&&String(e.employeeNumber||'').trim())return false;
+4644:     if(status==='missing-email'&&String(e.email||'').trim())return false;
+4645:     return true;
+4646:   });
+4848:     $$('[data-remove-member]').forEach(btn=>btn.addEventListener('click',async()=>{const uid=btn.dataset.removeMember;if(!confirm('確定移除此帳號？'))return;try{const {error}=await supabase.rpc('remove_member',{p_org_id:currentOrg.id,p_target_user:uid});if(error)throw error;toast('帳號已移除');await loadMemberships();renderSettings();}catch(e){toast('移除失敗',e.message,'error')}}));
+5266:   if(window.titvDesktop?.isDesktop&&typeof window.titvDesktop.fetchBackend==='function'&&String(path||'').startsWith('/.netlify/functions/')){
+5274:   const configured=Boolean(data.configured),connected=Boolean(data.connected),checking=Boolean(data.checking);
+5306:     const res=await titvBackendFetch('/.netlify/functions/line-status',{method:'POST',headers,body:JSON.stringify({orgId:currentOrg.id})});
+5318:   const res=await titvBackendFetch('/.netlify/functions/line-send',{method:'POST',headers,body:JSON.stringify({orgId,kind,message:kind==='change'?text:'',imageUrl:img,retryKey})});
+6488: function renderWorkspaceList(){$('workspaceList').innerHTML=memberships.map(m=>`<button class="org-choice" style="width:100%;text-align:left;margin-bottom:8px" data-workspace-id="${m.org_id}" type="button"><span class="choice-no">${roleLabel(m.role)}</span><h3>${esc(m.organization?.name||'工作空間')}</h3><p>${m.org_id===currentOrg?.id?'目前使用中':'點選切換'}</p></button>`).join('');$$('[data-workspace-id]').forEach(b=>b.addEventListener('click',async()=>{try{await selectWorkspace(b.dataset.workspaceId);closeModal('workspaceModal');renderAll();toast('已切換工作空間',currentOrg?.name||'')}catch(e){toast('切換失敗',e.message,'error')}}))}
+6489: 
+6490: async function boot(){
+6491:   window.addEventListener('online',()=>{if(cloudActive()){toast('網路已恢復','正在重新連線…');startRealtime();}else if(isCloudConfigured()){setAuthConnectionState('connecting','網路已恢復，正在重新連線…');ensureSupabaseInitialized().catch(console.warn);}});
+6492:   window.addEventListener('beforeprint',()=>renderPrintSchedule());
+6493:   window.addEventListener('offline',()=>{if(cloudActive()){realtimeStatus='degraded';renderConnectionStatus();startRealtimePolling(7000);}if(!viewerMode){showAuthGate();setAuthConnectionState('error','目前沒有網路連線');}});
+6494:   document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&cloudActive()){loadCloudData().catch(console.warn);if(realtimeStatus!=='connected')startRealtime();}});
+6495:   if(!state.meta)state.meta={orgName:'工程部',systemName:'製播排班系統',logoDataUrl:DEFAULT_LOGO_DATA};
+6496:   state.meta.logoDataUrl=DEFAULT_LOGO_DATA;
+6497:   const logoRepairKey='titv_logo_locked_v32615';storageSet(logoRepairKey,'1');state.audits=(state.audits||[]).slice(0,25);saveLocalState();bindUI();renderBrand();renderAll();setInterval(()=>{if(currentView==='dashboard')renderDashboard();if(currentView==='schedule'&&cloudActive())refreshPendingChangeNotifications(currentWeek,{force:true}).catch(console.warn)},15000);
+6498:   if(isCloudConfigured()&&!cloudBypass){showAuthGate();setAuthConnectionState('connecting','正在建立安全連線…');}
+6499:   setTextSafe('systemVersionText',SYSTEM_VERSION);window.__schedulerBootReady=true;const bootEl=$('bootScreen');if(bootEl){bootEl.classList.add('done');setTimeout(()=>bootEl.remove(),300);}await sleep(30);
+6500:   if(isCloudConfigured()){const ok=await initCloud({showToast:false});if(!ok&&!cloudCfg.forceCloud){cloudBypass=true;hideAuthGate();renderAll();toast('目前以本機模式啟動','雲端設定未完成，可到系統設定重新連線。','warning')}}else if(cloudCfg.forceCloud){showAuthGate();setAuthConnectionState('error','正式版尚未設定雲端連線');authMessage('正式版尚未設定雲端連線。請確認 Supabase Project URL 與 Publishable Key。','error')}else hideAuthGate();
+6501: }
+6502: 
+6503: boot().catch(e=>{window.__schedulerBootReady=true;console.error(e);const bootEl=$('bootScreen');if(bootEl)bootEl.classList.add('done');showAuthGate();setAuthConnectionState('error','系統啟動失敗');authMessage(`雲端連線失敗：${friendlyAuthError(e)}`,'error');toast('系統啟動時發生錯誤',friendlyAuthError(e),'error')});
+6504: 
+6505: 
+6506: 
+6507: /* V3.28.0｜週間排班 Undo/Redo 雲端一致性修復 */
+6508: function buildScheduleImageExportSvg(base=currentWeek,{sourceState=state,fullWeek=false,generatedAt=Date.now()}={}){
+6509:   const ds=weekDates(base),filter=fullWeek?'':activeScheduleStaffFilter();
+6510:   const exportEmployeeName=id=>sourceState.employees.find(e=>e.id===id)?.name||'未指定';
+6511:   const events=(sourceState.events||[]).filter(e=>eventIsActive(e)&&ds.includes(e.date)&&(!filter||eventPeople(e).includes(filter)));
+6512:   const byDay=Object.fromEntries(ds.map(d=>[d,events.filter(e=>e.date===d).sort((a,b)=>minutes(a.start)-minutes(b.start)||String(a.title||'').localeCompare(String(b.title||''),'zh-Hant'))]));
+6513:   const bounds=scheduleTimeBounds(ds,filter,sourceState.events||[]);
+6514:   const timeSet=new Set();
+6515:   for(let x=bounds.start;x<=bounds.end;x+=60)timeSet.add(`${String(Math.floor(x/60)%24).padStart(2,'0')}:00`);
+6516:   events.forEach(e=>timeSet.add(e.start));
+6517:   const times=[...timeSet].sort((a,b)=>minutes(a)-minutes(b));
+6518:   const weeklyLeaves=Object.fromEntries(ds.map(d=>[d,(sourceState.leaves||[]).filter(l=>l.date===d&&leaveDisplaysInWeeklyStatus(l.type)).sort((a,b)=>exportEmployeeName(a.employeeId).localeCompare(exportEmployeeName(b.employeeId),'zh-Hant'))]));
+6519: 
+6520:   const W=3508,margin=54,headerH=196,leftW=132,headH=168;
+6521:   const gridW=3240,gridX=(W-gridW)/2,dayW=(gridW-leftW)/7;
+6522:   const cardW=dayW*0.88,cardInset=(dayW-cardW)/2;
+6523:   const top=margin,headY=top+headerH,bodyY=headY+headH;
+6524:   const logo=safeDataImage(DEFAULT_LOGO_DATA);
+6525:   const esc=v=>svgEscape(v==null?'':String(v));
+6526:   const wrap=(v,n,max=99)=>wrapTextLines(String(v||''),n).slice(0,max);
+6527:   const weekdayLong=d=>new Intl.DateTimeFormat('zh-TW',{weekday:'long',timeZone:'UTC'}).format(parseDateOnly(d));
+6528:   const weekdayShort=d=>new Intl.DateTimeFormat('zh-TW',{weekday:'short',timeZone:'UTC'}).format(parseDateOnly(d));
+6529:   const weekRange=`${ds[0].replaceAll('-','/')} — ${ds[6].replaceAll('-','/')}`;
+6530:   const versionText=weekPublicationLabel(base,sourceState,{compact:true});
+6531:   const exportTime=new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(generatedAt));
+6532: 
+6533:   const assignmentLines=e=>{
+6534:     const groups=buildEventAssignmentGroups(e,{nameFor:exportEmployeeName,fullWeek}),out=[];
+6535:     for(const g of [...groups.primary,...groups.support]){
+6536:       const nameLines=wrap(g.names.join('、'),8,12);
+6537:       if(!nameLines.length)continue;
+6538:       out.push({role:g.role,text:nameLines[0]});
+6539:       nameLines.slice(1).forEach(t=>out.push({role:'',text:t}));
+6540:     }
+6541:     if(!out.length)out.push({role:'',text:'尚未排人'});
+6542:     return out;
+6543:   };
+6544:   const cardLayout=e=>{
+6545:     const titles=wrap(e.title||'未命名工作',9,4);
+6546:     const locations=e.location?wrap(e.location,11,3):[];
+6547:     const assigns=assignmentLines(e);
+6548:     const h=30 + titles.length*58 + locations.length*42 + 24 + assigns.length*48 + 30;
+6549:     return {titles,locations,assigns,height:Math.max(196,h)};
+6550:   };
+6551:   const rowHeights=times.map(tm=>{
+6552:     let need=192;
+6553:     for(const d of ds){
+6554:       const arr=byDay[d].filter(e=>e.start===tm);
+6555:       if(arr.length){
+6556:         const total=arr.reduce((sum,e)=>sum+cardLayout(e).height,0)+(arr.length-1)*10+18;
+6557:         need=Math.max(need,total);
+6558:       }
+6559:     }
+6560:     return need;
+6561:   });
+6562:   const scheduleH=rowHeights.reduce((a,b)=>a+b,0);
+6563: 
+6564:   const weeklyRowsMax=Math.max(1,...ds.map(d=>Math.max(1,Math.ceil((weeklyLeaves[d].length||0)/2))));
+6565:   const weeklyTitleH=78,weeklyHeadH=72,weeklyChipH=54,weeklyPad=16;
+6566:   const weeklyH=weeklyTitleH+weeklyHeadH+weeklyRowsMax*weeklyChipH+weeklyPad*2;
+6567:   const weeklyY=bodyY+scheduleH+18;
+6568:   const actualH=weeklyY+weeklyH+margin;
+6569: 
+6570:   const p=[]; let defs='';
+6571:   p.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${actualH}" viewBox="0 0 ${W} ${actualH}">`);
+6572:   p.push(`<defs><style>
+6573:     text{font-family:'Noto Sans TC','PingFang TC','Microsoft JhengHei',Arial,sans-serif;fill:#111111}
+6574:     .headline{font-size:58px;font-weight:950;fill:#111111}.orgsys{font-size:34px;font-weight:900;fill:#111111}.range{font-size:43px;font-weight:950;fill:#111111}
+6575:     .weekday{font-size:31px;font-weight:900;fill:#111111}.date{font-size:50px;font-weight:950;fill:#111111}.time{font-size:42px;font-weight:950;fill:#111111}
+6576:     .title{font-size:46px;font-weight:950;fill:#111111}.location{font-size:31px;font-weight:800;fill:#333333}.role{font-size:29px;font-weight:950;fill:#111111}.name{font-size:36px;font-weight:850;fill:#111111}
+6577:     .section{font-size:39px;font-weight:950;fill:#111111}.leaveDay{font-size:29px;font-weight:900;fill:#111111}.leaveChip{font-size:25px;font-weight:900;fill:#111111}.leaveNone{font-size:23px;font-weight:800;fill:#555555}.version{font-size:31px;font-weight:950;fill:#111111}.updated{font-size:24px;font-weight:800;fill:#333333}.badgeText{font-size:22px;font-weight:900;fill:#111111}
+6578:   
+6579: 
+6580: </style><filter id="v3250Shadow" x="-10%" y="-10%" width="120%" height="120%"><feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#25384a" flood-opacity=".08"/></filter></defs>`);
+6581:   p.push(`<rect width="100%" height="100%" fill="#ffffff"/>`);
+6582:   p.push(`<rect x="${gridX-18}" y="${top-18}" width="${gridW+36}" height="${actualH-top-margin+36}" rx="18" fill="#ffffff" stroke="#111111" stroke-width="2"/>`);
+6583:   p.push(`<rect x="${gridX}" y="${top}" width="${gridW}" height="${headerH}" rx="14" fill="#ffffff" stroke="#111111" stroke-width="1.5"/>`);
+6584:   p.push(`<rect x="${gridX}" y="${top}" width="${gridW}" height="9" rx="22" fill="#b64f45"/>`);
+6585:   p.push(`<rect x="${gridX+gridW*0.24}" y="${top}" width="${gridW*0.19}" height="9" fill="#c89b43"/>`);
+6586:   p.push(`<rect x="${gridX+gridW*0.43}" y="${top}" width="${gridW*0.19}" height="9" fill="#668a69"/>`);
+6587:   p.push(`<rect x="${gridX+gridW*0.62}" y="${top}" width="${gridW*0.19}" height="9" fill="#6e96b3"/>`);
+6588:   if(logo)p.push(`<image href="${esc(logo)}" x="${gridX+26}" y="${top+30}" width="122" height="112" preserveAspectRatio="xMidYMid meet"/>`);
+6589:   const tx=gridX+(logo?172:32);
+6590:   p.push(`<text x="${tx}" y="${top+82}" class="orgsys">${esc(sourceState.meta?.orgName||'工程部')}｜${esc(sourceState.meta?.systemName||'製播排班系統')}</text>`);
+6591:   p.push(`<text x="${tx}" y="${top+142}" class="range">${esc(weekRange)}</text>`);
+6592:   p.push(`<rect x="${gridX+gridW-375}" y="${top+34}" width="345" height="48" rx="8" fill="#ffffff" stroke="#111111" stroke-width="1.25"/>`);
+6593:   p.push(`<text x="${gridX+gridW-202}" y="${top+67}" text-anchor="middle" class="version">${esc(versionText)}</text>`);
+6594:   p.push(`<rect x="${gridX+gridW-375}" y="${top+94}" width="345" height="42" rx="8" fill="#ffffff" stroke="#111111" stroke-width="1.25"/>`);
+6595:   p.push(`<text x="${gridX+gridW-202}" y="${top+123}" text-anchor="middle" class="updated">輸出 ${esc(exportTime)}</text>`);
+6596:   p.push(`<path d="M ${gridX+gridW-120} ${top+154} l 14 -14 l 14 14 l -14 14 z" fill="#b64f45" opacity=".22"/><path d="M ${gridX+gridW-83} ${top+154} l 14 -14 l 14 14 l -14 14 z" fill="#c89b43" opacity=".26"/><path d="M ${gridX+gridW-46} ${top+154} l 14 -14 l 14 14 l -14 14 z" fill="#668a69" opacity=".26"/>`);
+6597: 
+6598:   p.push(`<rect x="${gridX}" y="${headY}" width="${leftW}" height="${headH}" fill="#f1f1f1" stroke="#111111" stroke-width="1.4"/>`);
+6599:   p.push(`<text x="${gridX+leftW/2}" y="${headY+74}" text-anchor="middle" style="font-size:31px;font-weight:950;fill:#111111">時間</text>`);
+6600:   const today=localDateISO();
+6601:   ds.forEach((d,i)=>{
+6602:     const x=gridX+leftW+i*dayW,obj=parseDateOnly(d),holiday=holidayForDate(d),holidayLines=holiday?wrap(holiday,10,2):[],fill=holiday?'#fff0ec':(d===today?'#f6edcf':'#f7f7f7');
+6603:     p.push(`<rect x="${x}" y="${headY}" width="${dayW}" height="${headH}" fill="${fill}" stroke="#111111" stroke-width="1.4"/>`);
+6604:     if(d===today)p.push(`<rect x="${x}" y="${headY+headH-4}" width="${dayW}" height="4" fill="#b68b49"/>`);
+6605:     p.push(`<text x="${x+dayW/2}" y="${headY+38}" text-anchor="middle" class="weekday">${esc(weekdayLong(d))}</text>`);
+6606:     p.push(`<text x="${x+dayW/2}" y="${headY+96}" text-anchor="middle" class="date">${String(obj.getUTCMonth()+1).padStart(2,'0')}/${String(obj.getUTCDate()).padStart(2,'0')}</text>`);
+6607:     holidayLines.forEach((line,lineIndex)=>p.push(`<text x="${x+dayW/2}" y="${headY+130+lineIndex*30}" text-anchor="middle" style="font-size:27px;font-weight:950;fill:#a33f38">${esc(line)}</text>`));
+6608:   });
+6609: 
+6610:   let y=bodyY;
+6611:   times.forEach((tm,ri)=>{
+6612:     const rowH=rowHeights[ri];
+6613:     p.push(`<rect x="${gridX}" y="${y}" width="${leftW}" height="${rowH}" fill="#f4f4f4" stroke="#111111" stroke-width="1.25"/>`);
+6614:     p.push(`<text x="${gridX+leftW/2}" y="${y+rowH/2+13}" text-anchor="middle" class="time">${esc(tm)}</text>`);
+6615:     ds.forEach((d,di)=>{
+6616:       const x=gridX+leftW+di*dayW;
+6617:       p.push(`<rect x="${x}" y="${y}" width="${dayW}" height="${rowH}" fill="${ri%2===0?'#ffffff':'#fbfbfb'}" stroke="#111111" stroke-width="1.25"/>`);
+6618:       const arr=byDay[d].filter(e=>e.start===tm);
+6619:       if(arr.length){
+6620:         defs+=`<clipPath id="v3250_${ri}_${di}"><rect x="${x+5}" y="${y+5}" width="${dayW-10}" height="${rowH-10}" rx="8"/></clipPath>`;
+6621:         p.push(`<g clip-path="url(#v3250_${ri}_${di})">`);
+6622:         let cy=y+9;
+6623:         for(const e of arr){
+6624:           const layout=cardLayout(e),bx=x+cardInset,bg=eventPastelColor(e.color,e.type,.80),line=normalizeEventColor(e.color,e.type);
+6625:           p.push(`<rect x="${bx}" y="${cy}" width="${cardW}" height="${layout.height}" rx="8" fill="${bg}" stroke="#111111" stroke-width="1.35"/>`);
+6626:           p.push(`<rect x="${bx}" y="${cy}" width="7" height="${layout.height}" rx="4" fill="${line}"/>`);
+6627:           let ty=cy+54;
+6628:           layout.titles.forEach(s=>{p.push(`<text x="${bx+cardW/2}" y="${ty}" text-anchor="middle" class="title">${esc(s)}</text>`);ty+=58;});
+6629:           layout.locations.forEach(s=>{p.push(`<text x="${bx+cardW/2}" y="${ty}" text-anchor="middle" class="location">${esc(s)}</text>`);ty+=42;});
+6630:           p.push(`<line x1="${bx+24}" y1="${ty+3}" x2="${bx+cardW-24}" y2="${ty+3}" stroke="#111111" stroke-width="1" stroke-opacity=".24"/>`);ty+=42;
+6631:           layout.assigns.forEach(lineObj=>{
+6632:             if(lineObj.role){p.push(`<text x="${bx+cardW/2}" y="${ty}" text-anchor="middle"><tspan class="role">${esc(lineObj.role)}</tspan><tspan class="name">　${esc(lineObj.text)}</tspan></text>`);}else{p.push(`<text x="${bx+cardW/2}" y="${ty}" text-anchor="middle" class="name">${esc(lineObj.text)}</text>`);}ty+=48;
+6633:           });
+6634:           cy+=layout.height+10;
+6635:         }
+6636:         p.push(`</g>`);
+6637:       }
+6638:     });
+6639:     y+=rowH;
+6640:   });
+6641: 
+6642:   p.push(`<rect x="${gridX}" y="${weeklyY}" width="${gridW}" height="${weeklyH}" rx="10" fill="#ffffff" stroke="#111111" stroke-width="1.5"/>`);
+6643:   p.push(`<rect x="${gridX}" y="${weeklyY}" width="${gridW}" height="7" rx="18" fill="#b64f45"/>`);
+6644:   p.push(`<text x="${gridX+22}" y="${weeklyY+54}" class="section">當週休假／加班狀態</text>`);
+6645:   const weekCol=gridW/7,chipGap=8,chipPadX=12,chipW=(weekCol-chipPadX*2-chipGap)/2,chipH=40;
+6646:   ds.forEach((d,i)=>{
+6647:     const x=gridX+i*weekCol,obj=parseDateOnly(d),rows=weeklyLeaves[d];
+6648:     p.push(`<rect x="${x}" y="${weeklyY+78}" width="${weekCol}" height="${weeklyH-78}" fill="none" stroke="#111111" stroke-width="1.1"/>`);
+6649:     p.push(`<text x="${x+weekCol/2}" y="${weeklyY+112}" text-anchor="middle" class="leaveDay">${esc(`${obj.getUTCMonth()+1}/${obj.getUTCDate()}（${weekdayShort(d)}）`)}</text>`);
+6650:     const baseY=weeklyY+136;
+6651:     if(!rows.length){
+6652:       p.push(`<text x="${x+weekCol/2}" y="${baseY+31}" text-anchor="middle" class="leaveNone">無休假／加班狀態</text>`);
+6653:     }else{
+6654:       rows.forEach((l,idx)=>{
+6655:         const col=idx%2,row=Math.floor(idx/2),bx=x+chipPadX+col*(chipW+chipGap),by=baseY+row*weeklyChipH;
+6656:         const type=canonicalLeaveType(l.type),label=`${exportEmployeeName(l.employeeId)} · ${type}`,overtime=type==='加班H',official=type==='國定假日H';
+6657:         p.push(`<rect x="${bx}" y="${by}" width="${chipW}" height="${chipH}" rx="8" fill="${overtime?'#eaf4ec':official?'#eaf1f8':'#ffffff'}" stroke="${overtime?'#79a486':official?'#7f9fba':'#111111'}" stroke-width="${overtime||official?'1.8':'1.1'}"/>`);
+6658:         p.push(`<text x="${bx+chipW/2}" y="${by+28}" text-anchor="middle" class="leaveChip" style="fill:${overtime?'#356347':official?'#315d80':'#111111'};font-weight:${overtime||official?'950':'850'}">${esc(label)}</text>`);
+6659:       });
+6660:     }
+6661:   });
+6662: 
+6663:   p[1]=p[1].replace('</defs>',defs+'</defs>');
+6664:   p.push(`</svg>`);
+6665:   return {svg:p.join(''),width:W,height:actualH};
+6666: }
+6667: </script>
+6668: 
+6669: </body>
+6670: </html>
