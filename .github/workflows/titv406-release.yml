@@ -33,7 +33,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
       - name: Prepare prior verified UI repairs
         run: npm run prepare:ui
-      - name: Add half-day leave to both clients
+      - name: Add half-day leave and time-picker lifecycle fix to both clients
         shell: pwsh
         run: |
           node adjust406.mjs
@@ -88,6 +88,7 @@ jobs:
           上午、下午預設及自訂起訖時間；以實際時段檢查排班衝突。
           保留原假別代碼，半天資料寫入既有 leaves.leave_meta。
           班表、列印與 Excel 顯示半天時段；保留原民台圖示及圖示防重複修正。
+          修正關閉休假視窗後，時間選擇器殘留遮擋按鈕。
           網頁與 Windows 使用相同核心程式。網頁原有檔案及四個後端 Functions 保留。
           Windows 安裝檔尚未簽署發行者憑證。測試使用隔離資料；未代替使用者測試真實帳號登入或發送通知。
           '@ | Set-Content release406-notes.txt -Encoding utf8
