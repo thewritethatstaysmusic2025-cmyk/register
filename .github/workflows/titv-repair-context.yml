@@ -1,0 +1,42 @@
+name: TITV repair source context
+on:
+  push:
+    branches: [titv-desktop-405-ui-repair]
+    paths: [.github/workflows/titv-repair-context.yml]
+permissions:
+  contents: write
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract repair context
+        run: |
+          python3 - <<'PY'
+          import urllib.request,re,hashlib
+          from pathlib import Path
+          url='https://6ab3a0849a645030d62dee84--titv-engineering-scheduler.netlify.app/'
+          raw=urllib.request.urlopen(url,timeout=30).read().decode('utf-8-sig')
+          lines=raw.splitlines(); picked=set()
+          targets=['function setView(', 'function renderAll(', 'function renderDashboard(', 'function renderSchedule(', 'function renderMobile', 'function setHTML', 'let state', 'async function init(', 'function boot(', 'function enterLocal', 'function closeModal(', 'function renderPrint(', 'function buildTimelineSvg(']
+          for i,line in enumerate(lines):
+            if any(t in line for t in targets): picked.update(range(max(0,i-2),min(len(lines),i+65)))
+            if re.search(r'const (config|ui)|let (config|ui)|\.netlify/functions/|addEventListener\(.+(mouseover|mouseenter)|MutationObserver|insertAdjacentHTML|<script',line): picked.add(i)
+          picked.update(range(max(0,len(lines)-125),len(lines)))
+          output=['Source: '+url,'SHA256: '+hashlib.sha256(raw.encode()).hexdigest()]
+          for i in sorted(picked):
+            s=lines[i]
+            s=re.sub(r'eyJ[A-Za-z0-9_\-.]{60,}','[REDACTED]',s)
+            s=re.sub(r'data:[^\s\"\']+', '[DATA-URI]',s)
+            s=re.sub(r'[A-Za-z0-9+/=_-]{160,}','[LONG-LITERAL]',s)
+            output.append(f'{i+1}: {s[:4000]}')
+          Path('audit').mkdir(exist_ok=True)
+          Path('audit/repair-context.txt').write_text('\n'.join(output))
+          print('Context recorded; version:', re.search(r"const SYSTEM_VERSION=['\"]([^'\"]+)",raw).group(1))
+          PY
+          git config user.name 'TITV UI repair'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add audit/repair-context.txt
+          git commit -m '[skip ci] Retain targeted repair source excerpts'
+          git push origin HEAD:titv-desktop-405-ui-repair
