@@ -18,9 +18,9 @@ currentWeek='2026-09-28';leaveWeek=currentWeek;currentView='dashboard';
 const qaEmployee=(id,name,roles)=>({id,name,employeeNumber:id,email:'',hireDate:'2024-01-01',roles,active:true,order:1,note:'',notifyPublish:false,notifyChange:false,notifyEmergency:false,notifyCancel:false});
 state={meta:{orgName:'測試工程部',systemName:'製播排班系統',logoDataUrl:DEFAULT_LOGO_DATA},employees:[qaEmployee('QA1','測試甲',['CAM','VE']),qaEmployee('QA2','測試乙',['TD','AE'])],events:[{id:'qa-event-1',date:currentWeek,start:'09:00',end:'10:00',title:'介面測試勤務',type:'news',location:'測試棚',notes:'',status:'draft',color:defaultEventColor('news'),required:{PD:0,AD:0,TD:1,CAM:1,VE:0,AE:0},assignments:{PD:[],AD:[],TD:['QA2'],CAM:['QA1'],VE:[],AE:[]},updatedAt:'2026-09-28T00:00:00Z'}],leaves:[],templates:[],weeks:{[currentWeek]:{status:'draft',version:1,publishedAt:null}},audits:[]};
 bindUI();hideAuthGate();renderAll();setTextSafe('systemVersionText',SYSTEM_VERSION);window.__schedulerBootReady=true;document.getElementById('bootScreen')?.remove();
-window.__qa={render:renderAll,view:setView,bind:bindUI,icons:()=>typeof syncUiIcons==='function'?syncUiIcons():0,print:renderPrintSchedule,image:()=>buildScheduleImageExportSvg(currentWeek,{generatedAt:0}),assignment:()=>buildAssignmentInputs(state.events[0]),menu:setMobileSidebar};
+window.__qa={render:renderAll,view:setView,bind:bindUI,icons:()=>typeof syncUiIcons==='function'?syncUiIcons():0,print:renderPrintSchedule,image:()=>buildScheduleImageExportSvg(currentWeek,{generatedAt:0}).svg,assignment:()=>buildAssignmentInputs(state.events[0]),menu:setMobileSidebar};
 `;
-  return html.slice(0,m.index)+m[0].replace(m[1],code)+html.slice(m.index+m[0].length);
+  return html.slice(0,m.index)+m[0].replace(m[1],()=>code)+html.slice(m.index+m[0].length);
 }
 const pages={original:fixtureHTML(await fs.readFile('qa/original.html','utf8')),fixed:fixtureHTML(await fs.readFile('app/index.html','utf8'))};
 const server=http.createServer(async(req,res)=>{
