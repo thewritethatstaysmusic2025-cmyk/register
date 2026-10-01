@@ -1,0 +1,26 @@
+name: Read public TITV leave UI
+on:
+  push:
+    branches: [titv-halfday-406]
+    paths: [.github/workflows/titv-leave-read.yml]
+permissions:
+  contents: read
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read public page leave functions only
+        run: |
+          python3 - <<'PY'
+          import urllib.request,re
+          url='https://6ab3a0849a645030d62dee84--titv-engineering-scheduler.netlify.app/'
+          lines=urllib.request.urlopen(url,timeout=30).read().decode('utf-8-sig').splitlines()
+          keep=set()
+          for i,line in enumerate(lines):
+            if re.search(r'台內|半天|leave_meta|leaveMeta|leaveDuration|leaveHours|leaveStart|leaveEnd|leaveDisplayLabel|leaveConflicts|leaveType|canonicalLeave|function.*[Ll]eave',line):
+              keep.update(range(max(0,i-1),min(len(lines),i+3)))
+          for i in sorted(keep):
+            line=lines[i]
+            if len(line)>9000 or re.search(r'eyJ[A-Za-z0-9_.-]{50,}|data:image',line): continue
+            print(str(i+1)+': '+line)
+          PY
