@@ -1,0 +1,58 @@
+name: Verify public half-day delivery
+on:
+  push:
+    branches: [titv-halfday-406]
+    paths: [.github/workflows/titv-halfday-release-check.yml]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Verify release assets and viewer validation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import urllib.request,urllib.error,json,time,hashlib,base64,re,pathlib
+          repo='thewritethatstaysmusic2025-cmyk/register'
+          api='https://api.github.com/repos/'+repo+'/releases/tags/v4.0.11'
+          release=None
+          for attempt in range(48):
+            try:
+              release=json.load(urllib.request.urlopen(urllib.request.Request(api,headers={'Accept':'application/vnd.github+json'}),timeout=20))
+              break
+            except urllib.error.HTTPError as e:
+              if e.code!=404: raise
+              time.sleep(5)
+          assert release and not release['draft'] and not release['prerelease'],'Published release not ready'
+          assets={a['name']:a for a in release['assets']}
+          exe='TITV_Engineering_Scheduler_Setup_4.0.11_x64.exe'
+          assert exe in assets and 'latest.yml' in assets
+          metadata=urllib.request.urlopen(assets['latest.yml']['browser_download_url'],timeout=30).read().decode()
+          assert 'version: 4.0.11' in metadata and exe in metadata
+          data=urllib.request.urlopen(assets[exe]['browser_download_url'],timeout=90).read()
+          assert data[:2]==b'MZ' and len(data)==assets[exe]['size']
+          sha256=hashlib.sha256(data).hexdigest()
+          if assets[exe].get('digest'): assert assets[exe]['digest']=='sha256:'+sha256
+          expected=re.search(r'sha512:\s*(\S+)',metadata).group(1)
+          assert base64.b64encode(hashlib.sha512(data).digest()).decode()==expected
+          viewer='https://umgvwfnbzumddqyuiccl.supabase.co/functions/v1/schedule-viewer'
+          statuses={}
+          for method,body in [('OPTIONS',None),('POST',b'{"employeeNumber":"!","weekStart":"2026-09-28"}')]:
+            req=urllib.request.Request(viewer,data=body,method=method,headers={'Content-Type':'application/json'})
+            try:
+              response=urllib.request.urlopen(req,timeout=30);status=response.status;payload=response.read().decode()
+            except urllib.error.HTTPError as e: status=e.code;payload=e.read().decode()
+            statuses[method]=status
+            assert status==(200 if method=='OPTIONS' else 400),(method,status,payload[:120])
+          report={'passed':True,'release':release['tag_name'],'sha256':sha256,'installerBytes':len(data),'sha512Verified':True,'viewerValidation':statuses,'realStaffDataAccessed':False,'notificationsSent':False,'installationPerformed':False,'webProductionDeployed':False}
+          pathlib.Path('VERIFICATION.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TITV-411-Public-Verification
+          path: VERIFICATION.json
+          if-no-files-found: error
