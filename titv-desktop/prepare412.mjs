@@ -1,0 +1,17 @@
+import './prepare411.mjs';
+import fs from 'node:fs/promises';
+import crypto from 'node:crypto';
+const version='4.0.12';
+let html=await fs.readFile('app/index.html','utf8');
+html=html.replace('name="titv-desktop-version" content="4.0.11"','name="titv-desktop-version" content="'+version+'"');
+await fs.writeFile('app/index.html',html);
+const manifest=JSON.parse(await fs.readFile('qa/halfday-manifest.json','utf8'));
+manifest.desktopVersion=version;manifest.desktopSha256=crypto.createHash('sha256').update(html).digest('hex');
+for(const file of ['app/repair-info.json','qa/halfday-manifest.json'])await fs.writeFile(file,JSON.stringify(manifest,null,2));
+const release='web-overlay/RELEASE_NOTES_V3.33.9.txt';await fs.writeFile(release,(await fs.readFile(release,'utf8')).replace('Desktop 4.0.11','Desktop '+version));
+let main=await fs.readFile('runtime/main.cjs','utf8');
+const old='核心 V3.33.8 · UI 修正版';
+if(!main.includes(old))throw Error('Unexpected About dialog source');
+main=main.replace(old,'核心 ${JSON.parse(fs.readFileSync(path.join(ROOT,\'app\',\'repair-info.json\'),\'utf8\')).coreVersion} · 半天休假版');
+await fs.writeFile('runtime/main.cjs',main);
+console.log('Desktop '+version+' and About dialog match core '+manifest.coreVersion);
