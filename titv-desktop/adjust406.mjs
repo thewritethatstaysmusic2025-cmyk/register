@@ -5,6 +5,9 @@ const marker="code=replaceFunction(code,'saveLeave',fn=>fn.replace('${l.date} ${
 assert(s.includes(marker));
 const from='${exportEmployeeName(l.employeeId)} · ${type}';
 const to=from+"${leaveIsHalfDay(l)&&type!=='半天'?' 半天':''}";
-const extra="code=replaceFunction(code,'renderLeave',fn=>fn.replace("+JSON.stringify('[meta.detail,leaveHasTimeRange(l)?')+','+JSON.stringify("[leaveIsHalfDay(l)&&canonicalLeaveType(l.type)!=='半天'?'半天':'',meta.detail,leaveHasTimeRange(l)?")+"));\ncode=replaceFunction(code,'buildScheduleImageExportSvg',fn=>once(fn,"+JSON.stringify(from)+','+JSON.stringify(to)+"));\n";
+let extra="code=replaceFunction(code,'renderLeave',fn=>fn.replace("+JSON.stringify('[meta.detail,leaveHasTimeRange(l)?')+','+JSON.stringify("[leaveIsHalfDay(l)&&canonicalLeaveType(l.type)!=='半天'?'半天':'',meta.detail,leaveHasTimeRange(l)?")+"));\ncode=replaceFunction(code,'buildScheduleImageExportSvg',fn=>once(fn,"+JSON.stringify(from)+','+JSON.stringify(to)+"));\n";
+extra+="code=replaceFunction(code,'closeModal',fn=>once(fn,'function closeModal(id){','function closeModal(id){\\n  hideSegmentTime24Picker();'));\n";
+extra+="code=replaceFunction(code,'openLeaveModal',fn=>once(fn,'if(!canEdit())return;refreshEmployeeOptions();','if(!canEdit())return;hideSegmentTime24Picker();refreshEmployeeOptions();'));\n";
+extra+="code=replaceFunction(code,'openLeaveModal',fn=>once(fn,\"$(field).addEventListener('input',\",\"for(const eventName of ['input','change'])$(field).addEventListener(eventName,\"));\n";
 s=s.replace(marker,()=>extra+marker);await fs.writeFile(file,s);
 const test='test406.mjs';let t=await fs.readFile(test,'utf8');assert(t.includes('print:()=>buildSchedulePrintSvg(currentWeek),'));t=t.replace('print:()=>buildSchedulePrintSvg(currentWeek),','print:()=>buildSchedulePrintSvg(currentWeek).svg,');await fs.writeFile(test,t);
