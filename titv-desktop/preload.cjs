@@ -1,7 +1,7 @@
 const {contextBridge,ipcRenderer}=require('electron');
 contextBridge.exposeInMainWorld('titvDesktop',Object.freeze({
   isDesktop:true,
-  version:'4.0.5',
+  version:'4.0.6',
   publicWebUrl:'https://titv-engineering-scheduler.netlify.app',
   fetchBackend:(path,options={})=>ipcRenderer.invoke('titv:backend',path,{
     method:options.method||'GET',headers:options.headers||{},body:options.body??null
