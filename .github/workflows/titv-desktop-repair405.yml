@@ -1,0 +1,146 @@
+name: TITV Desktop 4.0.5 verified UI repair
+on:
+  push:
+    branches: [titv-desktop-405-ui-repair]
+    paths: [.github/workflows/titv-desktop-repair405.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: titv-desktop-405-release
+  cancel-in-progress: false
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: titv-desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned tools
+        run: npm install --no-audit --no-fund
+      - name: Prepare current-core UI repair
+        run: npm run prepare:ui
+      - name: Install test browser
+        run: npx playwright install chromium
+      - name: Run isolated UI tests
+        shell: pwsh
+        run: |
+          $p = 'test405.mjs'
+          $t = [IO.File]::ReadAllText((Join-Path (Get-Location) $p))
+          $t = $t.Replace('.replace(m[1],code)', '.replace(m[1],()=>code)')
+          [IO.File]::WriteAllText((Join-Path (Get-Location) $p), $t, [Text.UTF8Encoding]::new($false))
+          npm run test:ui
+          if ($LASTEXITCODE -ne 0) { throw 'UI regression failed; no release will be published.' }
+      - name: Prepare unchanged TITV application icon
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $src=[Drawing.Image]::FromFile((Resolve-Path 'app/android-chrome-192x192.png'))
+          $bmp=New-Object Drawing.Bitmap 512,512
+          $g=[Drawing.Graphics]::FromImage($bmp)
+          $g.Clear([Drawing.Color]::Transparent)
+          $g.InterpolationMode=[Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+          $g.DrawImage($src,0,0,512,512)
+          $bmp.Save((Join-Path (Get-Location) 'build/icon.png'),[Drawing.Imaging.ImageFormat]::Png)
+          $g.Dispose();$bmp.Dispose();$src.Dispose()
+      - name: Build actual Windows installer
+        run: npm run dist
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Test packaged Windows application
+        run: node smoke405.mjs
+      - name: Verify metadata and assemble delivery
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $exe='dist/TITV_Engineering_Scheduler_Setup_4.0.5_x64.exe'
+          if(!(Test-Path $exe) -or !(Test-Path "$exe.blockmap") -or !(Test-Path 'dist/latest.yml')){throw 'Missing updater artifacts'}
+          if((Get-Content 'dist/latest.yml' -Raw) -notmatch 'version: 4.0.5'){throw 'Wrong updater version'}
+          $hash=(Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
+          "$hash  TITV_Engineering_Scheduler_Setup_4.0.5_x64.exe" | Set-Content 'dist/SHA256SUMS.txt'
+          $report=@{version='4.0.5';core='V3.33.8';installerBytes=(Get-Item $exe).Length;sha256=$hash;signed=$false;webProductionDeployed=$false;uiTests=(Get-Content 'qa/test-report.json' -Raw|ConvertFrom-Json);windowsSmoke=(Get-Content 'qa/windows-smoke.json' -Raw|ConvertFrom-Json)}
+          $report|ConvertTo-Json -Depth 20|Set-Content 'qa/release-report.json' -Encoding utf8
+          Compress-Archive -Path 'web-overlay/*' -DestinationPath 'dist/TITV_Web_UI405_Overlay.zip'
+          Copy-Item 'qa/release-report.json' 'dist/TEST_REPORT.json'
+          @'
+          TITV Desktop 4.0.5 — UI repair
+          Core: V3.33.8, pinned source SHA256 99967353a3cf9a1729c99e6078f0bd9f54a5718edf66b7bc4488387bfccca3f1
+          - Dedicated SVG icon slots with idempotent replacement; no global SVG reset.
+          - Isolated icon dimensions and positioning; shared icon sprite and export functions retained.
+          - Quick-action label isolated from icon nodes; prevent duplicate UI binding and duplicate current-view renders.
+          - Windows renderer security enabled, with restricted desktop backend bridge.
+          - Manual update check menu. Downloaded updates require an explicit restart decision; no forced install on exit.
+          Verification: local fixture UI regression and packaged Windows launch checks. No live signed-in data or notification tests.
+          Unsigned Windows installer. Existing cloud database and production website were not changed.
+          '@ | Set-Content 'release_notes.md' -Encoding utf8
+      - name: Retain lockfile and sanitized verification report
+        shell: pwsh
+        run: |
+          git config user.name 'TITV UI repair'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package-lock.json test405.mjs qa/release-report.json
+          git commit -m '[skip ci] Record tested Desktop 4.0.5 lockfile and verification'
+          git push origin HEAD:titv-desktop-405-ui-repair
+      - name: Publish new version without overwriting prior releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $repo='thewritethatstaysmusic2025-cmyk/register'
+          $tag='v4.0.5'
+          gh release view $tag --repo $repo *> $null
+          if($LASTEXITCODE -eq 0){throw 'Version already exists; do not overwrite a released installer.'}
+          $target=(git rev-parse HEAD)
+          gh release create $tag 'dist/TITV_Engineering_Scheduler_Setup_4.0.5_x64.exe' 'dist/TITV_Engineering_Scheduler_Setup_4.0.5_x64.exe.blockmap' 'dist/latest.yml' 'dist/SHA256SUMS.txt' 'dist/TEST_REPORT.json' 'dist/TITV_Web_UI405_Overlay.zip' --repo $repo --target $target --title 'TITV Desktop 4.0.5 — UI Repair' --notes-file 'release_notes.md' --latest
+          if($LASTEXITCODE -ne 0){throw 'Release publish failed'}
+      - name: Verify public update discovery from 4.0.4
+        shell: pwsh
+        run: |
+          @'
+          const {app}=require('electron');
+          const fs=require('node:fs');
+          const path=require('node:path');
+          app.getVersion=()=> '4.0.4';
+          const {NsisUpdater}=require('electron-updater');
+          app.whenReady().then(async()=>{
+            try{
+              const u=new NsisUpdater({provider:'github',owner:'thewritethatstaysmusic2025-cmyk',repo:'register',channel:'latest'});
+              u.forceDevUpdateConfig=true;u.autoDownload=false;u.autoInstallOnAppQuit=false;u.allowPrerelease=false;u.allowDowngrade=false;
+              u.on('error',()=>{});
+              const result=await u.checkForUpdates();
+              if(result?.updateInfo?.version!=='4.0.5')throw Error('Published update is not discoverable');
+              const report={passed:true,from:'4.0.4',to:result.updateInfo.version,files:result.updateInfo.files,downloadPerformed:false,installationPerformed:false};
+              fs.writeFileSync(path.join(__dirname,'updater-discovery.json'),JSON.stringify(report,null,2));
+              console.log(JSON.stringify(report));app.exit(0);
+            }catch(e){console.error(e);app.exit(1);}
+          });
+          setTimeout(()=>app.exit(2),60000).unref();
+          '@ | Set-Content 'qa/update-check.cjs' -Encoding utf8
+          & node_modules/.bin/electron.cmd 'qa/update-check.cjs'
+          if($LASTEXITCODE -ne 0){throw 'Public update discovery check failed'}
+          Copy-Item 'qa/updater-discovery.json' 'dist/UPDATE_DISCOVERY.json'
+      - name: Upload installer delivery
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-Desktop-4.0.5-UI-Repair
+          path: |
+            titv-desktop/dist/TITV_Engineering_Scheduler_Setup_4.0.5_x64.exe
+            titv-desktop/dist/SHA256SUMS.txt
+            titv-desktop/dist/TEST_REPORT.json
+            titv-desktop/dist/UPDATE_DISCOVERY.json
+          if-no-files-found: error
+      - name: Retain diagnostic artifacts even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TITV-405-Verification
+          path: |
+            titv-desktop/qa/*.json
+            titv-desktop/qa/screenshots/*.png
+          retention-days: 14
+          if-no-files-found: warn
