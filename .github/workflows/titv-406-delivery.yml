@@ -2,7 +2,7 @@ name: TITV half-day delivery
 on:
   push:
     branches: [titv-halfday-406]
-    paths: [.github/workflows/titv-406-delivery.yml]
+    paths: [.github/workflows/titv-406-delivery.yml, titv-desktop/preload.cjs]
 permissions:
   contents: read
 jobs:
