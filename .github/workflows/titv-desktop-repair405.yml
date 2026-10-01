@@ -33,6 +33,7 @@ jobs:
           $p = 'test405.mjs'
           $t = [IO.File]::ReadAllText((Join-Path (Get-Location) $p))
           $t = $t.Replace('.replace(m[1],code)', '.replace(m[1],()=>code)')
+          $t = $t.Replace('image:()=>buildScheduleImageExportSvg(currentWeek,{generatedAt:0}),', 'image:()=>buildScheduleImageExportSvg(currentWeek,{generatedAt:0}).svg,')
           [IO.File]::WriteAllText((Join-Path (Get-Location) $p), $t, [Text.UTF8Encoding]::new($false))
           npm run test:ui
           if ($LASTEXITCODE -ne 0) { throw 'UI regression failed; no release will be published.' }
