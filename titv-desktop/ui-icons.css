@@ -1,0 +1,54 @@
+/* TITV UI repair 4.0.5. Only owned icon slots, never all SVGs. */
+html body .titv-icon-slot[data-titv-icon] {
+  --titv-icon-size:20px;
+  display:inline-flex!important;
+  position:relative!important;
+  inset:auto!important;
+  transform:none!important;
+  translate:none!important;
+  rotate:none!important;
+  scale:none!important;
+  align-items:center!important;
+  justify-content:center!important;
+  box-sizing:border-box!important;
+  width:var(--titv-icon-size)!important;
+  min-width:var(--titv-icon-size)!important;
+  max-width:var(--titv-icon-size)!important;
+  height:var(--titv-icon-size)!important;
+  min-height:var(--titv-icon-size)!important;
+  max-height:var(--titv-icon-size)!important;
+  flex:0 0 var(--titv-icon-size)!important;
+  flex-shrink:0!important;
+  line-height:1!important;
+  vertical-align:middle!important;
+  pointer-events:none!important;
+}
+html body .button .titv-icon-slot[data-titv-icon] {--titv-icon-size:16px;}
+html body .icon-button .titv-icon-slot[data-titv-icon] {--titv-icon-size:18px;}
+html body .side-nav .nav-icon .titv-icon-slot[data-titv-icon] {--titv-icon-size:18px;}
+html body .mobile-nav .titv-icon-slot[data-titv-icon] {--titv-icon-size:19px;}
+html body .ops-action .titv-icon-slot[data-titv-icon] {--titv-icon-size:21px;}
+html body .history-button .titv-icon-slot[data-titv-icon] {--titv-icon-size:15px;}
+html body .brand-tribal-mark .titv-icon-slot[data-titv-icon] {--titv-icon-size:24px;}
+html body .titv-icon-slot[data-titv-icon] > svg.tribal-icon {
+  display:block!important;
+  position:relative!important;
+  inset:auto!important;
+  top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;
+  transform:none!important;translate:none!important;rotate:none!important;scale:none!important;
+  box-sizing:border-box!important;
+  width:var(--titv-icon-size)!important;
+  min-width:var(--titv-icon-size)!important;
+  max-width:var(--titv-icon-size)!important;
+  height:var(--titv-icon-size)!important;
+  min-height:var(--titv-icon-size)!important;
+  max-height:var(--titv-icon-size)!important;
+  flex:0 0 auto!important;
+  flex-shrink:0!important;
+  margin:0!important;
+  pointer-events:none!important;
+}
+html body .titv-action-label {min-width:0;}
+@media(max-width:560px) {
+  html body #appShell #quickAddBtn .titv-icon-slot[data-titv-icon] {--titv-icon-size:18px;}
+}
